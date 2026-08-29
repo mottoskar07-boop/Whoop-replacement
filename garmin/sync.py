@@ -161,7 +161,9 @@ def main():
         print("done", file=sys.stderr)
         # write incrementally so a crash/rate-limit partway through doesn't lose progress
         with open(args.output, "w") as f:
-            json.dump(store, f, indent=2, default=str)
+            # compact, not indent=2: per-minute/per-second HR arrays are large enough
+            # that pretty-printing multiplies the file size several times over
+            json.dump(store, f, separators=(",", ":"), default=str)
 
     print("Pulling activities...", file=sys.stderr)
     new_activities = fetch_activities(garmin, start.isoformat(), today.isoformat())
@@ -169,7 +171,7 @@ def main():
     store["synced_at"] = today.isoformat()
 
     with open(args.output, "w") as f:
-        json.dump(store, f, indent=2, default=str)
+        json.dump(store, f, separators=(",", ":"), default=str)
 
     print(f"Wrote {args.output}", file=sys.stderr)
     print(f"  days: {len(store['days'])}, activities: {len(store['activities'])}", file=sys.stderr)
