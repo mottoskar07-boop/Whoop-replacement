@@ -302,20 +302,26 @@ HTML_TEMPLATE = r"""<!doctype html>
   .flag{font-size:12px;color:var(--yellow);background:rgba(232,197,71,.1);border-radius:8px;padding:8px 10px;margin-top:8px;}
   .muted{color:var(--muted);}
   .footer-note{font-size:11px;color:var(--muted);text-align:center;margin-top:20px;}
+  .ring-row{display:flex;justify-content:space-between;gap:10px;padding:10px 0 4px;}
+  .ring-tile{flex:1;display:flex;flex-direction:column;align-items:center;background:none;border:none;color:inherit;font:inherit;cursor:pointer;padding:0;}
+  .ring-tile .ring-label{display:flex;align-items:center;gap:2px;font-size:12px;font-weight:600;letter-spacing:.04em;}
+  .ring-tile .chev{color:var(--muted);font-size:12px;}
 </style>
 </head>
 <body>
 <header>
   <h1>Wellness &middot; synced __SYNCED_AT__</h1>
   <nav>
-    <button class="tab active" data-view="recovery">Recovery</button>
+    <button class="tab active" data-view="today">Today</button>
+    <button class="tab" data-view="recovery">Recovery</button>
     <button class="tab" data-view="strain">Strain</button>
     <button class="tab" data-view="sleep">Sleep</button>
   </nav>
 </header>
 <main>
 
-<section id="view-recovery" class="view active"></section>
+<section id="view-today" class="view active"></section>
+<section id="view-recovery" class="view"></section>
 <section id="view-strain" class="view"></section>
 <section id="view-sleep" class="view"></section>
 
@@ -353,15 +359,52 @@ function hm(hours){
   return h+'h '+String(m).padStart(2,'0')+'m';
 }
 
-function ring(pct, color){
+function ring(pct, color, opts){
+  opts = opts || {};
+  const size = opts.size || 160;
+  const strokeW = opts.strokeW || 12;
+  const label = opts.label !== undefined ? opts.label : (Math.round(pct)+'%');
+  const fontSize = opts.fontSize || 34;
   const r=52, c=2*Math.PI*r;
   const off = c*(1-Math.max(0,Math.min(100,pct))/100);
-  return '<svg width="160" height="160" viewBox="0 0 140 140">'
-    +'<circle cx="70" cy="70" r="'+r+'" stroke="var(--panel2)" stroke-width="12" fill="none"/>'
-    +'<circle cx="70" cy="70" r="'+r+'" stroke="'+color+'" stroke-width="12" fill="none" stroke-linecap="round" '
+  return '<svg width="'+size+'" height="'+size+'" viewBox="0 0 140 140">'
+    +'<circle cx="70" cy="70" r="'+r+'" stroke="var(--panel2)" stroke-width="'+strokeW+'" fill="none"/>'
+    +'<circle cx="70" cy="70" r="'+r+'" stroke="'+color+'" stroke-width="'+strokeW+'" fill="none" stroke-linecap="round" '
     +'stroke-dasharray="'+c+'" stroke-dashoffset="'+off+'" transform="rotate(-90 70 70)"/>'
-    +'<text x="70" y="78" text-anchor="middle" font-size="34" font-weight="700" fill="var(--text)">'+Math.round(pct)+'%</text>'
+    +'<text x="70" y="78" text-anchor="middle" font-size="'+fontSize+'" font-weight="700" fill="var(--text)">'+label+'</text>'
     +'</svg>';
+}
+
+function showView(name){
+  document.querySelectorAll('nav .tab').forEach(b=>b.classList.toggle('active', b.dataset.view===name));
+  document.querySelectorAll('.view').forEach(v=>v.classList.toggle('active', v.id==='view-'+name));
+}
+
+function renderToday(){
+  const d = days[today];
+  const el = document.getElementById('view-today');
+  const recColor = d.recovery!==null ? bandColor[d.recovery_band] : 'var(--border)';
+  const sleepPct = d.sleep_performance_pct;
+  const strainPct = d.strain_clamped/21*100;
+
+  function tile(view, label, pct, color, centerLabel){
+    return '<button class="ring-tile" data-goto="'+view+'">'
+      +ring(pct, color, {size:100, strokeW:10, fontSize:24, label:centerLabel})
+      +'<div class="ring-label">'+label+'<span class="chev">&#8250;</span></div>'
+      +'</button>';
+  }
+
+  el.innerHTML =
+    '<div class="card"><h2>'+today+'</h2>'
+    +'<div class="ring-row">'
+      +tile('sleep', 'SLEEP', sleepPct!==null?Math.min(100,sleepPct):0, '#7fb3e8', sleepPct!==null?Math.round(sleepPct)+'%':'&mdash;')
+      +tile('recovery', 'RECOVERY', d.recovery||0, recColor, d.recovery!==null?Math.round(d.recovery)+'%':'&mdash;')
+      +tile('strain', 'STRAIN', strainPct, '#4da3ff', fmt(d.strain_clamped,1))
+    +'</div></div>';
+
+  el.querySelectorAll('[data-goto]').forEach(b=>{
+    b.addEventListener('click', ()=>showView(b.dataset.goto));
+  });
 }
 
 function renderRecovery(){
@@ -558,14 +601,10 @@ red (0-33%)      -> target strain 0-8.0`;
 }
 
 document.querySelectorAll('nav .tab').forEach(btn=>{
-  btn.addEventListener('click', ()=>{
-    document.querySelectorAll('nav .tab').forEach(b=>b.classList.remove('active'));
-    document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
-    btn.classList.add('active');
-    document.getElementById('view-'+btn.dataset.view).classList.add('active');
-  });
+  btn.addEventListener('click', ()=>showView(btn.dataset.view));
 });
 
+renderToday();
 renderRecovery();
 renderStrain();
 renderSleep();
