@@ -1,4 +1,6 @@
 data.json
 data.json.bak
+data.json.gz
+dashboard.html
 .garminconnect/
 *.log
