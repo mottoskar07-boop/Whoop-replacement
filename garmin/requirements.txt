@@ -1,0 +1,2 @@
+garminconnect>=0.2.19
+garth>=0.4.44
