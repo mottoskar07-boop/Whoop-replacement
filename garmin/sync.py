@@ -45,30 +45,35 @@ TOKENSTORE = os.path.expanduser("~/.garminconnect")
 REQUEST_PAUSE_SECONDS = 0.6  # be polite to Garmin's API; avoid rate-limiting a 90-day backfill
 
 
+def _prompt_mfa():
+    return input("Garmin MFA one-time code: ").strip()
+
+
 def init_api():
-    """Log in, preferring a cached token so cron runs never need a password."""
+    """Log in, preferring a cached token so cron runs never need a password.
+
+    garmin.login(tokenstore) tries the cached token first and only falls
+    back to self.username/self.password (raising GarminConnectAuthenticationError
+    if neither is set) when the cache is missing or invalid -- so the first
+    attempt below intentionally carries no credentials.
+    """
+    garmin = Garmin(prompt_mfa=_prompt_mfa)
     try:
-        garmin = Garmin()
         garmin.login(TOKENSTORE)
         print("Logged in using cached session token.", file=sys.stderr)
         return garmin
-    except (FileNotFoundError, GarminConnectAuthenticationError):
+    except (FileNotFoundError, GarminConnectAuthenticationError, GarminConnectConnectionError):
         pass
 
     email = input("Garmin Connect email: ").strip()
     password = getpass.getpass("Garmin Connect password (not echoed): ")
 
-    garmin = Garmin(email=email, password=password, return_on_mfa=True)
+    garmin = Garmin(email=email, password=password, prompt_mfa=_prompt_mfa)
     try:
-        result1, result2 = garmin.login()
+        garmin.login(TOKENSTORE)
     except GarminConnectAuthenticationError as e:
         sys.exit(f"Login failed: {e}")
 
-    if result1 == "needs_mfa":
-        mfa_code = input("Garmin MFA one-time code: ").strip()
-        garmin.resume_login(result2, mfa_code)
-
-    garmin.garth.dump(TOKENSTORE)
     print(f"Login succeeded. Session token cached at {TOKENSTORE} for future runs.", file=sys.stderr)
     return garmin
 
