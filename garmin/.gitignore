@@ -4,3 +4,4 @@ data.json.gz
 dashboard.html
 .garminconnect/
 *.log
+__pycache__/
