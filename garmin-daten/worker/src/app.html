@@ -703,7 +703,7 @@ const zoneOf = (bpm, z) => { if (!z) return -1; let i = -1; z.floors.forEach((f,
 function lineChart(pts, opts){
   const W = 320, H = 170, L = 30, R = 312, T = 10, B = 132;
   if (!pts.length) return "";
-  const t0 = pts[0][0], t1 = pts[pts.length - 1][0];
+  const t0 = pts[0][0], t1 = Math.max(pts[pts.length - 1][0], opts.tMax || 0);
   const vals = pts.map((p) => p[1]);
   // Runde Achse mit 3 gleich großen Schritten (5, 10, 15, 20, 25, 50 …)
   const lo = Math.min(...vals) - 3, hi = Math.max(...vals) + 3;
@@ -749,19 +749,24 @@ function chartStat(items){ return `<div style="display:flex;gap:18px;margin:2px 
 // Tagesverlauf Herzfrequenz (für die Vitalwerte), aus denselben Daten wie der Stress-Monitor
 async function renderDayHR(d){
   const el = $("hrCard"), st = d && d.stress;
-  const pts = st ? st.points.filter((p) => p[3] != null).map((p) => [p[0], p[3]]) : [];
+  const pts = st ? (st.hr || st.points.filter((p) => p[3] != null).map((p) => [p[0], p[3]])) : [];
   if (!pts.length) { el.style.display = "none"; return; }
   el.style.display = "block";
   const zones = await getZones();
   const v = pts.map((p) => p[1]);
+  const isToday = d.date === today();
+  const until = st.dataUntil || pts[pts.length - 1][0];
+  const lag = isToday && Date.now() - until > 20 * 60000;
   const bands = [];
   if (st.sleep) bands.push([st.sleep[0], st.sleep[1], "rgba(255,255,255,.05)"]);
   for (const a of st.activities) bands.push([a[0], a[1], "rgba(0,147,231,.14)"]);
+  const dayMax = Math.max(st.hrMax || Math.max(...v), st.actMaxHR || 0);
   el.innerHTML = `<h3>Herzfrequenz · Tagesverlauf</h3>
-    ${chartStat([["Min", fmt(Math.min(...v)) + " bpm"], ["Max", fmt(Math.max(...v)) + " bpm"], ["Ruhepuls", d.stats.rhr.value != null ? fmt(d.stats.rhr.value) + " bpm" : "–"]])}
-    ${lineChart(pts, { zones, color:"#FF4D6D", xLabel: clock, bands })}
+    ${chartStat([["Min", fmt(st.hrMin || Math.min(...v)) + " bpm"], ["Max", fmt(dayMax) + " bpm"], ["Ruhepuls", d.stats.rhr.value != null ? fmt(d.stats.rhr.value) + " bpm" : "–"]])}
+    ${lag ? `<div class="warn">Garmin hat den Puls-Tagesverlauf erst bis ${clock(until)} Uhr. Die Uhr synchronisiert ihn getrennt von den Aktivitäten – öffne die Garmin Connect App, dann aktualisieren (↻).</div>` : ""}
+    ${lineChart(pts, { zones, color:"#FF4D6D", xLabel: clock, bands, tMax: isToday ? Math.max(until, Date.now()) : null })}
     ${zoneLegend(zones)}
-    <div class="sub" style="text-align:left;margin-top:8px">5-Minuten-Mittelwerte. Grau hinterlegt: Schlaf, blau: Aktivitäten.</div>`;
+    <div class="sub" style="text-align:left;margin-top:8px">Garmins Tageswerte (meist alle 2 Minuten). Max enthält den Höchstwert aus deinen Aktivitäten${st.actMaxHR ? ` (${fmt(st.actMaxHR)} bpm)` : ""} – kurze Spitzen im Training zeigt die Aktivität sekundengenau. Grau hinterlegt: Schlaf, blau: Aktivitäten.</div>`;
 }
 
 // HRV-Verlauf der letzten Nacht

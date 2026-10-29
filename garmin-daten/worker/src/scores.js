@@ -339,16 +339,20 @@ export function buildStress(hrDto, sleepDto, activitiesRaw, rhr) {
   if (base == null) return null;
 
   const buckets = new Map();
+  const rawHr = []; // Garmins Einzelwerte (meist alle 2 min) für den Puls-Tagesverlauf, ungemittelt
   for (const row of hrDto.heartRateValues) {
     if (!Array.isArray(row)) continue;
     const t = gmtMs(row[ti]), hr = num(row[hi]);
     if (t == null || hr == null || hr <= 0) continue;
+    rawHr.push([t, Math.round(hr)]);
     const k = Math.floor(t / BUCKET_MS) * BUCKET_MS;
     const b = buckets.get(k) || { s: 0, n: 0 };
     b.s += hr; b.n++; buckets.set(k, b);
   }
   if (!buckets.size) return null;
 
+  rawHr.sort((a, b) => a[0] - b[0]);
+  const actMaxHR = (activitiesRaw || []).reduce((m, a) => Math.max(m, num(a.maxHR) || 0), 0) || null;
   const acts = (activitiesRaw || []).map((a) => {
     const s = gmtMs(a.startTimeGMT), dur = num(a.duration) || num(a.elapsedDuration) || 0;
     return s != null ? [s, s + dur * 1000] : null;
@@ -392,6 +396,11 @@ export function buildStress(hrDto, sleepDto, activitiesRaw, rhr) {
     highEpisodes,
     baseRhr: base,
     bpmPerPoint: STRESS_BPM_PER_POINT,
+    hr: rawHr,
+    hrMin: Math.min(...rawHr.map((p) => p[1])),
+    hrMax: Math.max(...rawHr.map((p) => p[1])),
+    actMaxHR,
+    dataUntil: rawHr[rawHr.length - 1][0],
   };
 }
 
