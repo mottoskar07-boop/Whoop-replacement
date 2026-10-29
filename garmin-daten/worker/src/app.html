@@ -512,7 +512,7 @@ function openDetail(kind){
         <div class="scale"><span>0</span><span>${fmt(t[0],1)}–${fmt(t[1],1)}</span><span>21</span></div></div>` : ""}
       <div class="card"><h3>Aktivitäten</h3><div id="dActs">${s.activities.length ? s.activities.map(actRow).join("") : `<div class="sub" style="text-align:left">Keine Aktivitäten.</div>`}</div></div>
       <div class="card"><h3>Belastung · 30 Tage</h3>${barsHtml(hist, (h) => h.strain, () => C.strain, 21)}</div>
-      <div class="sub">Berechnung: 21 · ln(1 + Last/12) / ln(1 + 90/12), Last = Garmin-Trainingsbelastung des Tages (${fmt(s.load - 4)}) + 4 für den Alltag.</div>`);
+      <div class="sub">Berechnung nach dem Whoop-Prinzip: Herz-Kreislauf-Last aus Minuten je Pulszone (Zone 1–5 zählen 0,25 / 0,5 / 1 / 3 / 8 je Minute), plus Muskel-Last bei Krafttraining, plus Alltag (Grundlast und Schritte). Heute: Alltag ${fmt(s.loadParts.everyday)} + Aktivitäten ${fmt(s.loadParts.activities)}${Math.abs(s.factor - 1) > 0.01 ? `, × ${fmt(s.factor, 2)} wegen deiner Erholung (niedrig = Belastung steigt schneller)` : ""}. Skala 0–21 sättigend: Belastung = 21 · (1 − e^(−Last/65)), 21 wird praktisch nie erreicht.</div>`);
     bindActs($("dActs"));
   }
   if (kind === "sleep") {
@@ -562,7 +562,9 @@ function openActivity(id){
     a.cadence ? ["Kadenz", fmt(a.cadence) + " spm"] : null,
     a.elevationGain ? ["Höhenmeter", fmt(a.elevationGain) + " m"] : null,
     a.sets ? ["Sätze / Wdh.", fmt(a.sets) + " / " + fmt(a.reps)] : null,
-    ["Trainingsbelastung", fmt(a.load)],
+    a.garminLoad != null ? ["Garmin-Trainingsbelastung", fmt(a.garminLoad)] : null,
+    ["Last Herz-Kreislauf / Muskel", fmt(a.cardioLoad) + " / " + fmt(a.muscleLoad)],
+    a.factor != null && Math.abs(a.factor - 1) > 0.01 ? ["Erholungsfaktor", "× " + fmt(a.factor, 2)] : null,
     a.aerobicTE != null ? ["Trainingseffekt aerob / anaerob", fmt(a.aerobicTE,1) + " / " + fmt(a.anaerobicTE,1)] : null,
     a.teLabel ? ["Schwerpunkt", esc(a.teLabel)] : null,
     a.calories ? ["Kalorien", fmt(a.calories) + " kcal"] : null,

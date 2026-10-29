@@ -25,8 +25,36 @@ const mean = (a) => a.reduce((s, v) => s + v, 0) / a.length;
 const sd = (a) => { const m = mean(a); return Math.sqrt(mean(a.map((v) => (v - m) ** 2))); };
 const num = (v) => (typeof v === "number" && isFinite(v) ? v : null);
 
+// Belastung nach dem Whoop-Prinzip (Annäherung, Whoops Formel ist nicht öffentlich):
+// - Herz-Kreislauf-Last: Minuten je Pulszone, höhere Zonen zählen überproportional
+// - Muskel-Last: Krafttraining zählt zusätzlich, weil der Puls es unterschätzt
+// - Alltag: Grundlast plus Schritte außerhalb von Aktivitäten
+// - Skala 0–21 sättigend: je höher die Belastung, desto schwerer wird jeder weitere Punkt;
+//   21 wird praktisch nie erreicht. Tagesbelastung ≠ Summe der Aktivitäten.
+// - Erholung: bei niedriger Erholung steigt die Belastung schneller, bei hoher langsamer.
+// Kalibriert an Erfahrungswerten (bei mittlerer Erholung): Ruhetag ≈ 6, 60 min locker ≈ 11,
+// 70 min Rad moderat ≈ 14, All-out-5-km ≈ 15–16 (bei niedriger Erholung ≈ 17–18).
+export const ZONE_WEIGHTS = [0.25, 0.5, 1, 3, 8];
+const STRAIN_TAU = 65;
+const DAY_BASE_LOAD = 8;
+const STEP_LOAD_PER_1000 = 1.2;
+
 export function strainFromLoad(load) {
-  return Math.min(21, (21 * Math.log(1 + load / 12)) / Math.log(1 + 90 / 12));
+  return 21 * (1 - Math.exp(-Math.max(0, load) / STRAIN_TAU));
+}
+
+export function recoveryFactor(recovery) {
+  return recovery == null ? 1 : clamp(1 + (50 - recovery) / 125, 0.8, 1.3);
+}
+
+function activityLoad(a) {
+  const cardio = [1, 2, 3, 4, 5].reduce((s, z, i) => s + ((num(a["hrTimeInZone_" + z]) || 0) / 60) * ZONE_WEIGHTS[i], 0);
+  const type = activityType(a) || "";
+  let muscle = 0;
+  if (/strength|weight|crossfit|hiit/i.test(type)) {
+    muscle = Math.max(((num(a.duration) || 0) / 60) * 0.5, (num(a.totalSets) || 0) * 1.5);
+  }
+  return { cardio, muscle };
 }
 
 export function recoveryBand(r) {
@@ -52,7 +80,7 @@ function activityType(a) {
 }
 
 export function summarizeActivity(a) {
-  const load = num(a.activityTrainingLoad) || 0;
+  const { cardio, muscle } = activityLoad(a);
   return {
     id: a.activityId,
     name: a.activityName || "Aktivität",
@@ -67,8 +95,12 @@ export function summarizeActivity(a) {
     maxHR: num(a.maxHR),
     calories: num(a.calories),
     elevationGain: num(a.elevationGain),
-    load,
-    strain: strainFromLoad(load),
+    garminLoad: num(a.activityTrainingLoad),
+    cardioLoad: cardio,
+    muscleLoad: muscle,
+    load: cardio + muscle,
+    steps: num(a.steps),
+    strain: null, // wird in buildDay mit dem Erholungsfaktor des Tages gesetzt
     aerobicTE: num(a.aerobicTrainingEffect),
     anaerobicTE: num(a.anaerobicTrainingEffect),
     teLabel: a.trainingEffectLabel || null,
@@ -106,8 +138,19 @@ export function buildDay(D, raw, windowDays = 30) {
   // Minuten seit 12:00 mittags, damit Zeiten um Mitternacht vergleichbar sind
   const clockMin = (ts) => { const t = localTs(ts); return t ? (Number(t.slice(11, 13)) * 60 + Number(t.slice(14, 16)) + 720) % 1440 : null; };
 
-  const dayLoad = (d) => (actsBy[d] || []).reduce((s, a) => s + a.load, 0) + 4.0;
-  const strainOf = (d) => (d in sumBy || d in actsBy || d === D ? strainFromLoad(dayLoad(d)) : null);
+  // Merkt sich Ergebnisse je Tag; verhindert Endlosschleifen (Belastung ↔ Erholung ↔ Schlafbedarf)
+  const memo = (fn) => { const m = new Map(); return (d) => { if (!m.has(d)) { m.set(d, null); m.set(d, fn(d)); } return m.get(d); }; };
+  const stepsOf = (d) => { try { return num(sumBy[d].movement.steps.value); } catch { return null; } };
+  const dayLoadParts = (d) => {
+    const acts = actsBy[d] || [];
+    const actLoad = acts.reduce((s, a) => s + a.load, 0);
+    const actSteps = acts.reduce((s, a) => s + (a.steps || 0), 0);
+    const everyday = DAY_BASE_LOAD + Math.max(0, (stepsOf(d) || 0) - actSteps) / 1000 * STEP_LOAD_PER_1000;
+    return { everyday, activities: actLoad, total: everyday + actLoad };
+  };
+  const dayLoad = (d) => dayLoadParts(d).total;
+  const recFactorOf = memo((d) => { const r = recovery(d); return recoveryFactor(r ? r.score : null); });
+  const strainOf = memo((d) => (d in sumBy || d in actsBy || d === D ? strainFromLoad(dayLoad(d) * recFactorOf(d)) : null));
 
   function sleepNeed(d) {
     const garmin = sleepNeedHours(sleepBy[d]);
@@ -148,7 +191,8 @@ export function buildDay(D, raw, windowDays = 30) {
     return null;
   }
 
-  function recovery(d) {
+  const recovery = memo((d) => recoveryRaw(d));
+  function recoveryRaw(d) {
     // Recovery erst, wenn die Nacht zu Tag d bei Garmin angekommen ist.
     if (sleepSecOf(d) == null) return null;
     const weights = { hrv: 0.5, rhr: 0.25, sleep: 0.25 };
@@ -165,6 +209,8 @@ export function buildDay(D, raw, windowDays = 30) {
     const score = Object.keys(parts).reduce((s, k) => s + (weights[k] / w) * parts[k], 0);
     return { score, parts, weights: Object.fromEntries(Object.keys(parts).map((k) => [k, weights[k] / w])), hrvBaseline: hb, rhrBaseline: rb };
   }
+
+  for (const a of acts) { a.factor = recFactorOf(a.date); a.strain = strainFromLoad(a.load * a.factor); }
 
   // Tageswerte für D
   const sDto = sleepBy[D] || null;
@@ -251,7 +297,7 @@ export function buildDay(D, raw, windowDays = 30) {
       hrvStatus: (hrvBy[D] && hrvBy[D].status) || null,
       rhr: rhrOf(D), rhrBaseline: rec.rhrBaseline && rec.rhrBaseline.mean,
     } : null,
-    strain: { score: strainScore, load: dayLoad(D), target: band ? TARGET_STRAIN[band] : null, activities: actsBy[D] || [] },
+    strain: { score: strainScore, load: dayLoad(D), loadParts: dayLoadParts(D), factor: recFactorOf(D), target: band ? TARGET_STRAIN[band] : null, activities: actsBy[D] || [] },
     sleep,
     stats,
     history,
