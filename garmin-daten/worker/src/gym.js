@@ -29,22 +29,39 @@ export const DEFAULT_EXERCISES = [
   ["cablecrunch", "Cable Crunch", "Core"], ["legraise", "Hängendes Beinheben", "Core", 0.3],
 ].map(([id, name, group, bw]) => ({ id, name, group, bw: bw || 0 }));
 
-export const DEFAULT_BODYWEIGHT = 80;
+export const DEFAULT_BODYWEIGHT = 83;
+
+// Startpläne aus Oskars bisheriger Gym-App; werden einmalig angelegt und sind danach frei änderbar
+const SEED_PLANS = [
+  ["seed_pull", "Pull (Rücken & Bizeps)", ["db_bench_pull", "latpull", "uni_close_row", "bayesian_curl", "hammer"]],
+  ["seed_legs", "Beine", ["legext", "hor_legpress", "lying_legcurl", "rdl", "hip_adduction", "calf_press"]],
+  ["seed_upper", "Oberkörper", ["latpull", "smith_incline", "machine_row", "tri_push", "cable_lateral", "bayesian_curl", "cablecrunch"]],
+  ["seed_push", "Push (Brust, Schulter, Trizeps)", ["smith_incline", "fly", "cable_lateral", "tri_push", "cablecrunch"]],
+].map(([id, name, ex]) => ({ id, name, items: ex.map((exId) => ({ exId, sets: 2, reps: "6–10" })) }));
 
 export function emptyGym() {
-  return { exercises: DEFAULT_EXERCISES, plans: [], workouts: {}, settings: { bodyweight: null } };
+  return { exercises: DEFAULT_EXERCISES, plans: [], workouts: {}, settings: { bodyweight: null }, seeded: false };
 }
 
 export function normalizeGym(g) {
   const base = emptyGym();
-  if (!g || typeof g !== "object") return base;
-  return {
+  if (!g || typeof g !== "object") g = {};
+  const out = {
     // Standardübungen immer aktuell aus dem Code, gespeichert werden nur eigene (id "c_…")
     exercises: base.exercises.concat((Array.isArray(g.exercises) ? g.exercises : []).filter((e) => e && /^c_/.test(e.id))),
     plans: Array.isArray(g.plans) ? g.plans : [],
     workouts: g.workouts && typeof g.workouts === "object" ? g.workouts : {},
-    settings: g.settings && typeof g.settings === "object" ? g.settings : base.settings,
+    settings: g.settings && typeof g.settings === "object" ? { ...g.settings } : base.settings,
+    seeded: !!g.seeded,
   };
+  // Einmalig: Startpläne und Körpergewicht setzen; mit dem nächsten Speichern gilt seeded = true,
+  // danach gelöschte Pläne kommen nicht wieder.
+  if (!out.seeded) {
+    for (const p of SEED_PLANS) if (!out.plans.some((x) => x.id === p.id)) out.plans.push(p);
+    if (out.settings.bodyweight == null) out.settings.bodyweight = DEFAULT_BODYWEIGHT;
+    out.seeded = true;
+  }
+  return out;
 }
 
 const str = (v, n) => String(v == null ? "" : v).slice(0, n);

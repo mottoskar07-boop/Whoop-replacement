@@ -948,7 +948,7 @@ async function renderGym(){
       : `<div class="sub" style="text-align:left">Sobald du Trainings einträgst, siehst du hier deine Entwicklung je Übung.</div>`}</div>
     <div class="card"><h3>Körpergewicht</h3>
       <div style="display:flex;gap:8px"><input type="text" inputmode="decimal" id="bwIn" value="${gym.settings.bodyweight ?? ""}" placeholder="z. B. 80"><button class="pill" id="bwSave">Speichern</button></div>
-      <div class="sub" style="text-align:left;margin-top:6px">Für die Muskel-Last (Volumen im Verhältnis zum Körpergewicht) und Körpergewichtsübungen. Ohne Angabe: 80 kg.</div></div>
+      <div class="sub" style="text-align:left;margin-top:6px">Für die Muskel-Last (Volumen im Verhältnis zum Körpergewicht) und Körpergewichtsübungen. Ohne Angabe: 83 kg.</div></div>
     <div class="card"><h3>Eigene Übungen</h3>
       ${custom.map((e) => `<div class="jrow"><span class="l">${esc(e.name)} <span class="k" style="color:var(--muted);font-size:12px">· ${esc(e.group)}</span></span><button class="del" data-delex="${esc(e.id)}" aria-label="Entfernen">×</button></div>`).join("")}
       <input type="text" id="exName" placeholder="Name, z. B. Bulgarian Split Squat" maxlength="60" style="margin-top:8px">
