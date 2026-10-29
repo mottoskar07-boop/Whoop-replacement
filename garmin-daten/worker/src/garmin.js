@@ -52,7 +52,7 @@ async function getToken(env, forceNew = false) {
 }
 
 // GET mit Token. Bei 401 einmal neuen Token holen; bei 429 sofort Fehler, kein Wiederholen.
-export async function garminGet(env, path) {
+async function garminFetch(env, path) {
   let token = await getToken(env);
   let res = await fetch(BASE + path, { headers: { Authorization: "Bearer " + token } });
   if (res.status === 401) {
@@ -63,5 +63,15 @@ export async function garminGet(env, path) {
     throw new GarminError(res.status, "Garmin antwortet mit " + res.status + " für " + path.split("?")[0],
       res.headers.get("retry-after"));
   }
-  return res.json();
+  return res;
+}
+
+export async function garminGet(env, path) {
+  return (await garminFetch(env, path)).json();
+}
+
+// Rohdaten (z. B. Aktivitätsdatei als ZIP)
+export async function garminGetRaw(env, path) {
+  const res = await garminFetch(env, path);
+  return { body: await res.arrayBuffer(), type: res.headers.get("content-type") || "application/octet-stream" };
 }

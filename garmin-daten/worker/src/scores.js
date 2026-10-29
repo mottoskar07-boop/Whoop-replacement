@@ -299,7 +299,7 @@ export function buildStress(hrDto, sleepDto, activitiesRaw, rhr) {
   const points = [...buckets.keys()].sort((a, b) => a - b).map((t) => {
     const hr = buckets.get(t).s / buckets.get(t).n;
     const flag = acts.some((r) => inRange(t, r)) ? "a" : inRange(t, sleep) ? "s" : "";
-    return [t, Math.round(clamp((hr - base) / STRESS_BPM_PER_POINT, 0, 3) * 100) / 100, flag];
+    return [t, Math.round(clamp((hr - base) / STRESS_BPM_PER_POINT, 0, 3) * 100) / 100, flag, Math.round(hr)];
   });
 
   // Glätten über 15 Minuten (Nachbarblöcke), damit einzelne Puls-Ausreißer nicht als Stress zählen
@@ -332,5 +332,24 @@ export function buildStress(hrDto, sleepDto, activitiesRaw, rhr) {
     highEpisodes,
     baseRhr: base,
     bpmPerPoint: STRESS_BPM_PER_POINT,
+  };
+}
+
+// HRV-Einzelwerte der Nacht (Garmin: ca. alle 5 Minuten im Schlaf)
+export function buildHrvNight(h) {
+  const pts = ((h && h.hrvReadings) || [])
+    .map((r) => [gmtMs(r.readingTimeGMT), num(r.hrvValue)])
+    .filter((p) => p[0] != null && p[1] != null && p[1] > 0)
+    .sort((a, b) => a[0] - b[0]);
+  if (pts.length < 2) return null;
+  const sum = (h && h.hrvSummary) || {};
+  const b = sum.baseline || {};
+  return {
+    points: pts,
+    avg: num(sum.lastNightAvg),
+    high5: num(sum.lastNight5MinHigh),
+    weeklyAvg: num(sum.weeklyAvg),
+    balanced: num(b.balancedLow) != null && num(b.balancedUpper) != null ? [b.balancedLow, b.balancedUpper] : null,
+    status: sum.status || null,
   };
 }

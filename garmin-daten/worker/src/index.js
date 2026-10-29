@@ -7,8 +7,8 @@
 
 import APP_HTML from "./app.html";
 import { ICON_SVG } from "./icon.js";
-import { garminGet, GarminError } from "./garmin.js";
-import { addDays, buildDay, buildStress } from "./scores.js";
+import { garminGet, garminGetRaw, GarminError } from "./garmin.js";
+import { addDays, buildDay, buildStress, buildHrvNight } from "./scores.js";
 
 const WINDOW_DAYS = 30;
 const DAY_CACHE_MS = 60 * 1000;
@@ -56,6 +56,13 @@ async function loadDay(env, D, fresh) {
     garminGet(env, `/usersummary-service/v2/dailysummaries?startDate=${from}&endDate=${D}`),
   ]);
   const body = buildDay(D, { activities, hrv, sleep, summaries }, WINDOW_DAYS);
+  // HRV-Verlauf der Nacht (Garmin misst HRV nur im Schlaf)
+  try {
+    const h = await garminGet(env, `/hrv-service/hrv/${D}`);
+    body.hrvNight = buildHrvNight(h);
+  } catch (e) {
+    body.hrvNight = null;
+  }
   // Stress-Monitor: eigener Abruf, ein Fehler hier soll die übrige App nicht blockieren
   try {
     const hr = await garminGet(env, `/wellness-service/wellness/dailyHeartRate?date=${D}`);
@@ -87,7 +94,23 @@ async function handleApi(request, env, url) {
     return json(await loadDay(env, D, url.searchParams.has("fresh")));
   }
 
+  // Original-Aktivitätsdatei (ZIP mit FIT) – wird im Browser ausgewertet (Puls- und HRV-Verlauf)
+  const fm = p.match(/^\/api\/activity\/(\d{1,20})\/file$/);
+  if (fm && request.method === "GET") {
+    const f = await garminGetRaw(env, `/download-service/files/activity/${fm[1]}`);
+    return new Response(f.body, { headers: { "content-type": f.type, "cache-control": "private, max-age=86400" } });
+  }
+
   if (!env.DATA) return json({ error: "KV-Speicher DATA ist nicht verbunden" }, 503);
+
+  if (p === "/api/zones" && request.method === "GET") {
+    let zones = await env.DATA.get("hr-zones", "json");
+    if (!zones) {
+      zones = await garminGet(env, "/biometric-service/heartRateZones/v2?generateDefaults=true");
+      await env.DATA.put("hr-zones", JSON.stringify(zones), { expirationTtl: 12 * 3600 });
+    }
+    return json(zones);
+  }
 
   if (p === "/api/journal" && request.method === "GET") return json(await readJournal(env));
 
