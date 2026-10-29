@@ -252,3 +252,85 @@ export function buildDay(D, raw, windowDays = 30) {
     warnings,
   };
 }
+
+// ---------- Stress-Monitor ----------
+// Garmins Personal API liefert keinen Stressverlauf, nur Tagessummen. Deshalb
+// eine Annäherung an Whoops 0–3-Skala aus dem Pulsverlauf: je 15 bpm über dem
+// Ruhepuls ein Punkt (0 = Ruhepuls, 3 = 45+ bpm darüber), in 5-Minuten-Blöcken.
+// Zeiten in Aktivitäten werden markiert und nicht als Stress gewertet.
+const STRESS_BPM_PER_POINT = 15;
+const BUCKET_MS = 5 * 60 * 1000;
+
+function gmtMs(ts) {
+  if (typeof ts === "number" && isFinite(ts)) return ts;
+  if (typeof ts === "string" && ts.length >= 16) {
+    const s = ts.replace(" ", "T");
+    return Date.parse(/Z|[+-]\d\d:?\d\d$/.test(s) ? s : s + "Z");
+  }
+  return null;
+}
+
+export function buildStress(hrDto, sleepDto, activitiesRaw, rhr) {
+  if (!hrDto || !Array.isArray(hrDto.heartRateValues) || !hrDto.heartRateValues.length) return null;
+  const desc = {};
+  for (const d of hrDto.heartRateValueDescriptors || []) if (d && d.key) desc[d.key.toLowerCase()] = d.index;
+  const ti = desc.timestamp != null ? desc.timestamp : 0, hi = desc.heartrate != null ? desc.heartrate : 1;
+  const base = num(rhr) || num(hrDto.restingHeartRate) || num(hrDto.minHeartRate);
+  if (base == null) return null;
+
+  const buckets = new Map();
+  for (const row of hrDto.heartRateValues) {
+    if (!Array.isArray(row)) continue;
+    const t = gmtMs(row[ti]), hr = num(row[hi]);
+    if (t == null || hr == null || hr <= 0) continue;
+    const k = Math.floor(t / BUCKET_MS) * BUCKET_MS;
+    const b = buckets.get(k) || { s: 0, n: 0 };
+    b.s += hr; b.n++; buckets.set(k, b);
+  }
+  if (!buckets.size) return null;
+
+  const acts = (activitiesRaw || []).map((a) => {
+    const s = gmtMs(a.startTimeGMT), dur = num(a.duration) || num(a.elapsedDuration) || 0;
+    return s != null ? [s, s + dur * 1000] : null;
+  }).filter(Boolean);
+  const sleep = sleepDto ? [gmtMs(sleepDto.sleepStartTimestampGMT), gmtMs(sleepDto.sleepEndTimestampGMT)] : null;
+  const inRange = (t, r) => r && r[0] != null && r[1] != null && t + BUCKET_MS > r[0] && t < r[1];
+
+  const points = [...buckets.keys()].sort((a, b) => a - b).map((t) => {
+    const hr = buckets.get(t).s / buckets.get(t).n;
+    const flag = acts.some((r) => inRange(t, r)) ? "a" : inRange(t, sleep) ? "s" : "";
+    return [t, Math.round(clamp((hr - base) / STRESS_BPM_PER_POINT, 0, 3) * 100) / 100, flag];
+  });
+
+  // Glätten über 15 Minuten (Nachbarblöcke), damit einzelne Puls-Ausreißer nicht als Stress zählen
+  const raw = points.map((p) => p[1]);
+  points.forEach((p, i) => {
+    const nb = [i - 1, i, i + 1].filter((j) => j >= 0 && j < points.length && Math.abs(points[j][0] - p[0]) <= BUCKET_MS);
+    p[1] = Math.round((nb.reduce((sum, j) => sum + raw[j], 0) / nb.length) * 100) / 100;
+  });
+
+  // Auswertung nur für Wachzeit ohne Aktivität
+  const awake = points.filter((p) => p[2] === "");
+  const minutes = { low: 0, medium: 0, high: 0 };
+  let highEpisodes = 0, prevHigh = false;
+  for (const p of awake) {
+    const lvl = p[1] >= 2 ? "high" : p[1] >= 1 ? "medium" : "low";
+    minutes[lvl] += 5;
+    if (lvl === "high" && !prevHigh) highEpisodes++;
+    prevHigh = lvl === "high";
+  }
+  const last = awake.slice(-3);
+  const current = last.length ? last.reduce((s, p) => s + p[1], 0) / last.length : null;
+  return {
+    points,
+    sleep: sleep && sleep[0] != null && sleep[1] != null ? sleep : null,
+    activities: acts,
+    current,
+    level: current == null ? null : current >= 2 ? "high" : current >= 1 ? "medium" : "low",
+    updatedAt: points[points.length - 1][0],
+    minutes,
+    highEpisodes,
+    baseRhr: base,
+    bpmPerPoint: STRESS_BPM_PER_POINT,
+  };
+}

@@ -8,7 +8,7 @@
 import APP_HTML from "./app.html";
 import { ICON_SVG } from "./icon.js";
 import { garminGet, GarminError } from "./garmin.js";
-import { addDays, buildDay } from "./scores.js";
+import { addDays, buildDay, buildStress } from "./scores.js";
 
 const WINDOW_DAYS = 30;
 const DAY_CACHE_MS = 60 * 1000;
@@ -56,6 +56,15 @@ async function loadDay(env, D, fresh) {
     garminGet(env, `/usersummary-service/v2/dailysummaries?startDate=${from}&endDate=${D}`),
   ]);
   const body = buildDay(D, { activities, hrv, sleep, summaries }, WINDOW_DAYS);
+  // Stress-Monitor: eigener Abruf, ein Fehler hier soll die übrige App nicht blockieren
+  try {
+    const hr = await garminGet(env, `/wellness-service/wellness/dailyHeartRate?date=${D}`);
+    const dayActs = (activities || []).filter((a) => String(a.startTimeLocal || "").startsWith(D) || (typeof a.startTimeLocal === "number" && new Date(a.startTimeLocal).toISOString().startsWith(D)));
+    body.stress = buildStress(hr, (sleep || []).find((x) => x && x.calendarDate === D), dayActs, body.recovery ? body.recovery.rhr : (body.stats.rhr.value));
+  } catch (e) {
+    body.stress = null;
+    body.warnings.push("Stress-Monitor: Pulsverlauf nicht abrufbar (" + (e.status || e.message) + ").");
+  }
   body.updatedAt = new Date().toISOString();
   dayCache.set(D, { t: Date.now(), body });
   return body;
