@@ -1,5 +1,5 @@
 {
-  "name": "garmin-whoop",
+  "name": "whoop-replacement",
   "main": "src/index.js",
   "compatibility_date": "2025-10-01"
 }

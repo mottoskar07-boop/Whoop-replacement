@@ -99,7 +99,7 @@ export default {
   async fetch(request, env) {
     const url = new URL(request.url);
     if (url.pathname === "/") {
-      return new Response("garmin-whoop läuft. Test: /test?code=DEIN_CODE", {
+      return new Response("whoop-replacement läuft. Test: /test?code=DEIN_CODE", {
         headers: { "content-type": "text/plain; charset=utf-8" },
       });
     }
