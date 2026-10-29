@@ -57,7 +57,7 @@
   .up{color:var(--green);} .down{color:var(--red);} .flat{color:var(--muted);}
   .tabbar{position:fixed;left:0;right:0;bottom:0;background:rgba(16,21,24,.96);border-top:1px solid var(--line);
     display:flex;justify-content:space-around;padding:8px 0 calc(8px + env(safe-area-inset-bottom));backdrop-filter:blur(10px);z-index:20;}
-  .tabbar button{display:flex;flex-direction:column;align-items:center;gap:3px;font-size:11px;font-weight:600;color:var(--muted);letter-spacing:.04em;min-width:80px;}
+  .tabbar button{display:flex;flex-direction:column;align-items:center;gap:3px;font-size:11px;font-weight:600;color:var(--muted);letter-spacing:.04em;min-width:64px;}
   .tabbar button.on{color:#fff;}
   .screen{display:none;} .screen.on{display:block;}
   .overlay{position:fixed;inset:0;background:var(--bg);z-index:30;overflow-y:auto;display:none;}
@@ -121,6 +121,12 @@
   .insight{border:1.5px solid #3d4fa8;border-radius:14px;padding:14px 16px;font-size:15px;line-height:1.45;margin:12px 0;}
   .coach{padding:16px;} .coach .t{font-weight:700;font-size:16px;} .coach .s{color:rgba(255,255,255,.7);font-size:14px;line-height:1.45;margin-top:6px;}
   .up{color:#00F19F;} .down{color:#FFA800;}
+  select{width:100%;background:var(--card2);border:1px solid var(--line);border-radius:10px;color:#fff;font:inherit;font-size:15px;padding:10px 12px;}
+  .setrow{display:grid;grid-template-columns:36px 1fr 1fr 32px;gap:8px;align-items:center;margin-top:6px;}
+  .setrow.head{color:var(--muted);font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;margin-top:8px;}
+  .setrow span:first-child{color:var(--muted);font-weight:700;text-align:center;}
+  .setrow input{padding:9px 10px;text-align:center;}
+  input[type=number]{width:100%;background:var(--card2);border:1px solid var(--line);border-radius:10px;color:#fff;font:inherit;font-size:15px;padding:10px;outline:none;}
 </style>
 </head>
 <body>
@@ -192,10 +198,17 @@
     <div id="actList"></div>
   </div></section>
 
+  <!-- GYM -->
+  <section class="screen" id="scr-gym"><div class="wrap">
+    <div class="topbar"><div></div><div class="datenav"><span class="cur">Gym</span></div><div></div></div>
+    <div id="gymBody"><div class="sub">Lädt …</div></div>
+  </div></section>
+
   <nav class="tabbar">
     <button data-tab="home" class="on"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3"/></svg>Heute</button>
     <button data-tab="journal"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 8h6M9 12h6M9 16h4"/></svg>Journal</button>
     <button data-tab="acts"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg>Aktivitäten</button>
+    <button data-tab="gym"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 7v10M18 7v10M3 10v4M21 10v4M6 12h12"/></svg>Gym</button>
   </nav>
 </div>
 
@@ -391,7 +404,8 @@ function renderStress(d){
 function actRow(a){
   const t = a.start ? a.start.slice(11,16) : "";
   const meta = [a.date !== curDate ? dateLabel(a.date) : null, t, hmS(a.durationS), a.distanceM ? fmt(a.distanceM / 1000, 2) + " km" : null, a.avgHR ? "Ø " + fmt(a.avgHR) + " bpm" : null].filter(Boolean).join(" · ");
-  return `<button class="act" data-act="${esc(a.id)}"><div class="badge">${fmt(a.strain,1)}</div><div class="grow"><div class="n">${esc(a.name)}</div><div class="m">${esc(meta)}</div></div><span class="chev">›</span></button>`;
+  const hint = a.strength && !a.workout ? `<div class="m" style="color:var(--yellow)">Übungen noch nicht eingetragen</div>` : "";
+  return `<button class="act" data-act="${esc(a.id)}"><div class="badge">${fmt(a.strain,1)}</div><div class="grow"><div class="n">${esc(a.name)}</div><div class="m">${esc(meta)}</div>${hint}</div><span class="chev">›</span></button>`;
 }
 function bindActs(el){ el.querySelectorAll("[data-act]").forEach((b) => b.onclick = () => openActivity(b.dataset.act)); }
 
@@ -423,8 +437,11 @@ $("refreshBtn").onclick = () => loadDay(true);
 document.querySelectorAll("[data-open]").forEach((b) => b.onclick = () => openDetail(b.dataset.open));
 
 // ---------- DETAILS ----------
-function openOverlay(html){ $("detailBody").innerHTML = html; $("detail").classList.add("on"); $("detail").scrollTop = 0; history.pushState({ o:1 }, ""); }
-function closeOverlay(){ $("detail").classList.remove("on"); }
+// Übereinanderliegende Detailansichten; "Zurück" (auch Android-Zurück) zeigt die vorherige
+const overlayStack = [];
+function showOverlayTop(){ const v = overlayStack[overlayStack.length - 1]; $("detailBody").innerHTML = v.html; $("detail").classList.add("on"); $("detail").scrollTop = 0; if (v.bind) v.bind(); }
+function openOverlay(html, bind){ overlayStack.push({ html, bind }); showOverlayTop(); history.pushState({ o: overlayStack.length }, ""); }
+function closeOverlay(){ overlayStack.pop(); if (overlayStack.length) showOverlayTop(); else $("detail").classList.remove("on"); }
 $("detailBack").onclick = () => history.back();
 window.addEventListener("popstate", closeOverlay);
 
@@ -512,8 +529,7 @@ function openDetail(kind){
         <div class="scale"><span>0</span><span>${fmt(t[0],1)}–${fmt(t[1],1)}</span><span>21</span></div></div>` : ""}
       <div class="card"><h3>Aktivitäten</h3><div id="dActs">${s.activities.length ? s.activities.map(actRow).join("") : `<div class="sub" style="text-align:left">Keine Aktivitäten.</div>`}</div></div>
       <div class="card"><h3>Belastung · 30 Tage</h3>${barsHtml(hist, (h) => h.strain, () => C.strain, 21)}</div>
-      <div class="sub">Berechnung nach dem Whoop-Prinzip: Herz-Kreislauf-Last aus Minuten je Pulszone (Zone 1–5 zählen 0,25 / 0,5 / 1 / 3 / 8 je Minute), plus Muskel-Last bei Krafttraining, plus Alltag (Grundlast und Schritte). Heute: Alltag ${fmt(s.loadParts.everyday)} + Aktivitäten ${fmt(s.loadParts.activities)}${Math.abs(s.factor - 1) > 0.01 ? `, × ${fmt(s.factor, 2)} wegen deiner Erholung (niedrig = Belastung steigt schneller)` : ""}. Skala 0–21 sättigend: Belastung = 21 · (1 − e^(−Last/65)), 21 wird praktisch nie erreicht.</div>`);
-    bindActs($("dActs"));
+      <div class="sub">Berechnung nach dem Whoop-Prinzip: Herz-Kreislauf-Last aus Minuten je Pulszone (Zone 1–5 zählen 0,25 / 0,5 / 1 / 3 / 8 je Minute), plus Muskel-Last bei Krafttraining, plus Alltag (Grundlast und Schritte). Heute: Alltag ${fmt(s.loadParts.everyday)} + Aktivitäten ${fmt(s.loadParts.activities)}${Math.abs(s.factor - 1) > 0.01 ? `, × ${fmt(s.factor, 2)} wegen deiner Erholung (niedrig = Belastung steigt schneller)` : ""}. Skala 0–21 sättigend: Belastung = 21 · (1 − e^(−Last/65)), 21 wird praktisch nie erreicht.</div>`, () => bindActs($("dActs")));
   }
   if (kind === "sleep") {
     const s = d.sleep;
@@ -561,9 +577,10 @@ function openActivity(id){
     a.avgHR ? ["Puls Ø / max", fmt(a.avgHR) + " / " + fmt(a.maxHR) + " bpm"] : null,
     a.cadence ? ["Kadenz", fmt(a.cadence) + " spm"] : null,
     a.elevationGain ? ["Höhenmeter", fmt(a.elevationGain) + " m"] : null,
-    a.sets ? ["Sätze / Wdh.", fmt(a.sets) + " / " + fmt(a.reps)] : null,
+    a.sets ? ["Sätze / Wdh. (Garmin)", fmt(a.sets) + " / " + fmt(a.reps)] : null,
+    a.workout ? ["Eingetragen", fmt(a.workout.exercises) + " Übungen · " + fmt(a.workout.sets) + " Sätze · " + fmt(a.workout.volume) + " kg"] : null,
     a.garminLoad != null ? ["Garmin-Trainingsbelastung", fmt(a.garminLoad)] : null,
-    ["Last Herz-Kreislauf / Muskel", fmt(a.cardioLoad) + " / " + fmt(a.muscleLoad)],
+    ["Last Herz-Kreislauf / Muskel", fmt(a.cardioLoad) + " / " + fmt(a.muscleLoad) + (a.strength ? (a.workout ? " (aus deinen Sätzen)" : " (geschätzt)") : "")],
     a.factor != null && Math.abs(a.factor - 1) > 0.01 ? ["Erholungsfaktor", "× " + fmt(a.factor, 2)] : null,
     a.aerobicTE != null ? ["Trainingseffekt aerob / anaerob", fmt(a.aerobicTE,1) + " / " + fmt(a.anaerobicTE,1)] : null,
     a.teLabel ? ["Schwerpunkt", esc(a.teLabel)] : null,
@@ -571,12 +588,15 @@ function openActivity(id){
   ].filter(Boolean);
   openOverlay(`
     <div class="bigdial">${ring(a.strain / 21, C.strain, fmt(a.strain, 1), "", "big", 7)}<div class="bigtitle">${esc(a.name)}</div><div class="sub">Belastung dieser Aktivität</div></div>
+    ${a.strength ? `<div id="wkCard">${workoutCard(a)}</div>` : ""}
     <div class="card" id="actHR"><h3>Herzfrequenz im Training</h3><div class="sub" style="text-align:left">Lade Verlauf …</div></div>
     <div class="card" id="actHRV"><h3>HRV im Training</h3><div class="sub" style="text-align:left">Lade …</div></div>
     <div class="card"><h3>Werte</h3>${rows.map(([k, v]) => `<div class="row"><span class="k">${k}</span><span class="v">${v}</span></div>`).join("")}</div>
     ${ztot ? `<div class="card"><h3>Zeit in Pulszonen</h3><div class="zones">${a.zones.map((z, i) => `<div style="width:${z / ztot * 100}%;background:${ZONE_C[i]}"></div>`).join("")}</div>
-      ${a.zones.map((z, i) => `<div class="row"><span class="k"><i class="dot" style="display:inline-block;background:${ZONE_C[i]}"></i> Zone ${i + 1}</span><span class="v">${hmS(z)} · ${fmt(z / ztot * 100)} %</span></div>`).join("")}</div>` : ""}`);
-  loadActivityCharts(a);
+      ${a.zones.map((z, i) => `<div class="row"><span class="k"><i class="dot" style="display:inline-block;background:${ZONE_C[i]}"></i> Zone ${i + 1}</span><span class="v">${hmS(z)} · ${fmt(z / ztot * 100)} %</span></div>`).join("")}</div>` : ""}`, () => {
+    loadActivityCharts(a);
+    if (a.strength) loadGym().then(() => { if (!$("wkCard")) return; $("wkCard").innerHTML = workoutCard(a); $("wkEdit").onclick = () => openWorkoutEditor(a); }).catch(() => {});
+  });
 }
 
 // ---------- PULS- UND HRV-DIAGRAMME ----------
@@ -787,6 +807,205 @@ async function loadActivityCharts(a){
   }
 }
 
+// ---------- GYM ----------
+let gym = null, gymP = null;
+function loadGym(force){
+  if (!gymP || force) gymP = api("/api/gym").then((g) => { gym = g; return g; }).catch((e) => { gymP = null; throw e; });
+  return gymP;
+}
+const exById = (id) => (gym && gym.exercises.find((e) => e.id === id)) || { id, name: id, group: "Sonstige", bw: 0 };
+const e1rm = (s) => (s.kg || 0) * (1 + s.reps / 30);
+function exSelect(sel, cls){
+  const groups = {};
+  for (const e of gym.exercises) (groups[e.group] = groups[e.group] || []).push(e);
+  return `<select class="${cls || ""}">${sel ? "" : `<option value="">Übung wählen …</option>`}${Object.keys(groups).map((g) => `<optgroup label="${esc(g)}">${groups[g].map((e) => `<option value="${esc(e.id)}"${e.id === sel ? " selected" : ""}>${esc(e.name)}</option>`).join("")}</optgroup>`).join("")}</select>`;
+}
+// Letzte Sätze einer Übung vor einem Datum (für Platzhalter und Fortschritt)
+function exerciseHistory(exId, beforeDate){
+  const out = [];
+  for (const [aid, w] of Object.entries(gym.workouts)) {
+    if (beforeDate && w.date && w.date >= beforeDate) continue;
+    const e = w.entries.find((x) => x.exId === exId);
+    if (e) out.push({ aid, date: w.date || "", sets: e.sets });
+  }
+  return out.sort((a, b) => a.date.localeCompare(b.date));
+}
+const setsTxt = (sets) => sets.map((s) => s.reps + "×" + (s.kg ? fmt(s.kg, s.kg % 1 ? 1 : 0) + " kg" : "KG")).join(", ");
+
+// Karte in der Aktivität
+function workoutCard(a){
+  const w = gym && gym.workouts[String(a.id)];
+  if (!w) return `<div class="card"><h3>Übungen</h3><div class="sub" style="text-align:left;margin-bottom:10px">Trag ein, was du gemacht hast. Dann berechnet die App die Muskel-Last aus deinen Sätzen statt sie zu schätzen.</div><button class="primary" id="wkEdit" style="margin-top:0">Training eintragen</button></div>`;
+  const vol = w.entries.reduce((s, e) => s + e.sets.reduce((t, x) => t + x.reps * (x.kg || 0), 0), 0);
+  return `<div class="card"><h3>Übungen</h3>
+    ${w.entries.map((e) => `<div class="row"><span class="k" style="color:#fff">${esc(exById(e.exId).name)}</span><span class="v" style="font-weight:500;font-size:13px">${esc(setsTxt(e.sets))}</span></div>`).join("")}
+    <div class="row"><span class="k">Volumen</span><span class="v">${fmt(vol)} kg · ${w.entries.reduce((s, e) => s + e.sets.length, 0)} Sätze</span></div>
+    ${w.note ? `<div class="sub" style="text-align:left;margin-top:6px">${esc(w.note)}</div>` : ""}
+    <button class="pill" id="wkEdit" style="margin-top:12px">Bearbeiten</button></div>`;
+}
+
+// Editor für ein Krafttraining
+let wk = null;
+function openWorkoutEditor(a){
+  const saved = gym.workouts[String(a.id)];
+  wk = { aid: String(a.id), date: a.date, planId: saved ? saved.planId : null, note: saved ? saved.note : "",
+    entries: saved ? JSON.parse(JSON.stringify(saved.entries)) : [] };
+  openOverlay(`<div id="wkBody"></div>`, renderWorkoutEditor);
+}
+function fromPlan(planId){
+  const p = gym.plans.find((x) => x.id === planId); if (!p) return;
+  wk.planId = planId;
+  wk.entries = p.items.map((it) => {
+    const last = exerciseHistory(it.exId, wk.date).pop();
+    return { exId: it.exId, target: it.reps, sets: Array.from({ length: it.sets }, (_, i) => ({ reps: null, kg: last && last.sets[Math.min(i, last.sets.length - 1)].kg || null })) };
+  });
+  renderWorkoutEditor();
+}
+function renderWorkoutEditor(){
+  const el = $("wkBody"); if (!el) return;
+  el.innerHTML = `<div class="dhead" style="margin-top:-34px">Training eintragen</div>
+    ${gym.plans.length ? `<div class="card"><h3>Trainingsplan übernehmen</h3><select id="wkPlan"><option value="">— ohne Plan —</option>${gym.plans.map((p) => `<option value="${esc(p.id)}"${p.id === wk.planId ? " selected" : ""}>${esc(p.name)}</option>`).join("")}</select>
+      <div class="sub" style="text-align:left;margin-top:6px">Übernimmt Übungen und Satzanzahl; Gewichte vom letzten Mal sind vorausgefüllt.</div></div>` : ""}
+    ${wk.entries.map((e, i) => {
+      const last = exerciseHistory(e.exId, wk.date).pop();
+      return `<div class="card" data-e="${i}">
+        <div style="display:flex;gap:8px;align-items:center">${exSelect(e.exId, "wkEx")}<button class="del" data-rmex="${i}" aria-label="Übung entfernen">×</button></div>
+        <div class="sub" style="text-align:left;margin:6px 0 4px">${e.target ? "Ziel: " + esc(e.target) + " Wdh. · " : ""}${last ? "Letztes Mal: " + esc(setsTxt(last.sets)) : "Noch keine Einträge"}</div>
+        <div class="setrow head"><span>Satz</span><span>Wdh.</span><span>kg</span><span></span></div>
+        ${e.sets.map((s, j) => `<div class="setrow"><span>${j + 1}</span>
+          <input type="number" inputmode="numeric" min="0" data-s="${j}" data-f="reps" value="${s.reps ?? ""}" placeholder="${last && last.sets[j] ? last.sets[j].reps : ""}">
+          <input type="number" inputmode="decimal" min="0" step="0.5" data-s="${j}" data-f="kg" value="${s.kg ?? ""}" placeholder="${last && last.sets[j] && last.sets[j].kg ? last.sets[j].kg : "0"}">
+          <button class="del" data-rms="${j}" aria-label="Satz entfernen">×</button></div>`).join("")}
+        <button class="link" data-adds="${i}" style="margin-top:8px">+ Satz</button>
+      </div>`;
+    }).join("")}
+    <div class="card"><h3>Übung hinzufügen</h3>${exSelect("", "wkAdd")}</div>
+    <div class="card"><h3>Notiz</h3><textarea id="wkNote" placeholder="Optional">${esc(wk.note || "")}</textarea></div>
+    <button class="primary" id="wkSave">Speichern</button>
+    ${gym.workouts[wk.aid] ? `<button class="link" id="wkDel" style="display:block;margin:16px auto;color:var(--red)">Eintrag löschen</button>` : ""}
+    <div class="status" id="wkStatus"></div>`;
+  if ($("wkPlan")) $("wkPlan").onchange = (ev) => { if (ev.target.value) fromPlan(ev.target.value); else wk.planId = null; };
+  el.querySelectorAll("[data-e]").forEach((card) => {
+    const e = wk.entries[Number(card.dataset.e)];
+    card.querySelector(".wkEx").onchange = (ev) => { e.exId = ev.target.value; renderWorkoutEditor(); };
+    card.querySelectorAll("input[data-s]").forEach((inp) => inp.oninput = () => {
+      const v = inp.value === "" ? null : Number(inp.value.replace(",", "."));
+      e.sets[Number(inp.dataset.s)][inp.dataset.f] = isFinite(v) ? v : null;
+    });
+    card.querySelectorAll("[data-rms]").forEach((b) => b.onclick = () => { e.sets.splice(Number(b.dataset.rms), 1); renderWorkoutEditor(); });
+    card.querySelector("[data-adds]").onclick = () => { const prev = e.sets[e.sets.length - 1]; e.sets.push({ reps: prev ? prev.reps : null, kg: prev ? prev.kg : null }); renderWorkoutEditor(); };
+    card.querySelector("[data-rmex]").onclick = () => { wk.entries.splice(Number(card.dataset.e), 1); renderWorkoutEditor(); };
+  });
+  el.querySelector(".wkAdd").onchange = (ev) => {
+    const id = ev.target.value; if (!id) return;
+    const last = exerciseHistory(id, wk.date).pop();
+    wk.entries.push({ exId: id, sets: (last ? last.sets : [{}, {}, {}]).map((s) => ({ reps: null, kg: s.kg || null })) });
+    renderWorkoutEditor();
+  };
+  $("wkNote").oninput = () => { wk.note = $("wkNote").value; };
+  $("wkSave").onclick = async () => {
+    const entries = wk.entries.map((e) => ({ exId: e.exId, sets: e.sets.filter((s) => s.reps > 0).map((s) => ({ reps: s.reps, kg: s.kg || 0 })) })).filter((e) => e.exId && e.sets.length);
+    if (!entries.length) { $("wkStatus").textContent = "Trag mindestens einen Satz mit Wiederholungen ein."; return; }
+    $("wkSave").disabled = true;
+    try {
+      await api("/api/gym/workout/" + wk.aid, { method:"PUT", body: JSON.stringify({ date: wk.date, planId: wk.planId, note: wk.note, entries }) });
+      await afterWorkoutChange();
+    } catch (e) { if (e.message !== "401") { $("wkStatus").textContent = "Fehler: " + e.message; $("wkSave").disabled = false; } }
+  };
+  if ($("wkDel")) $("wkDel").onclick = async () => {
+    if (!confirm("Eingetragenes Training löschen?")) return;
+    try { await api("/api/gym/workout/" + wk.aid, { method:"DELETE" }); await afterWorkoutChange(); }
+    catch (e) { if (e.message !== "401") $("wkStatus").textContent = "Fehler: " + e.message; }
+  };
+}
+async function afterWorkoutChange(){
+  const aid = wk.aid;
+  await loadGym(true);
+  history.back();                      // zurück zur Aktivität
+  await loadDay(true);                 // Belastung mit neuer Muskel-Last
+  setTimeout(() => { history.back(); setTimeout(() => openActivity(aid), 50); }, 50);
+}
+
+// Gym-Tab: Pläne, Fortschritt, Übungen, Körpergewicht
+let gymProgEx = null;
+async function renderGym(){
+  const el = $("gymBody");
+  try { await loadGym(); } catch (e) { if (e.message !== "401") el.innerHTML = `<div class="err">${esc(e.message)}</div>`; return; }
+  const custom = gym.exercises.filter((e) => /^c_/.test(e.id));
+  const used = [...new Set(Object.values(gym.workouts).flatMap((w) => w.entries.map((e) => e.exId)))];
+  if (!gymProgEx || !used.includes(gymProgEx)) gymProgEx = used[0] || null;
+  const hist = gymProgEx ? exerciseHistory(gymProgEx) : [];
+  const pts = hist.filter((h) => h.date).map((h) => [new Date(h.date + "T12:00:00").getTime(), Math.max(...h.sets.map(e1rm))]).filter((p) => p[1] > 0);
+  el.innerHTML = `
+    <div class="card"><h3>Trainingspläne</h3>
+      ${gym.plans.length ? gym.plans.map((p) => `<button class="act" data-plan="${esc(p.id)}"><div class="grow"><div class="n">${esc(p.name)}</div><div class="m">${p.items.length} Übungen · ${esc(p.items.slice(0, 3).map((i) => exById(i.exId).name).join(", "))}${p.items.length > 3 ? " …" : ""}</div></div><span class="chev">›</span></button>`).join("") : `<div class="sub" style="text-align:left">Noch keine Pläne.</div>`}
+      <button class="primary" id="planNew">Neuer Plan</button></div>
+    <div class="card"><h3>Fortschritt</h3>
+      ${used.length ? `<select id="progEx">${used.map((id) => `<option value="${esc(id)}"${id === gymProgEx ? " selected" : ""}>${esc(exById(id).name)}</option>`).join("")}</select>
+        ${pts.length >= 2 ? `<div style="margin-top:10px">${chartStat([["Bester geschätzter 1RM", fmt(Math.max(...pts.map((p) => p[1])), 1) + " kg"], ["Einheiten", String(hist.length)]])}${lineChart(pts, { color: C.green, xLabel: (t) => new Date(t).toLocaleDateString("de-DE", { day:"2-digit", month:"2-digit" }) })}</div>` : ""}
+        ${hist.slice(-6).reverse().map((h) => `<div class="row"><span class="k">${h.date ? new Date(h.date + "T12:00:00").toLocaleDateString("de-DE", { day:"2-digit", month:"2-digit", year:"2-digit" }) : "–"}</span><span class="v" style="font-weight:500;font-size:13px">${esc(setsTxt(h.sets))}</span></div>`).join("")}
+        <div class="sub" style="text-align:left;margin-top:6px">Geschätzter 1RM nach Epley: Gewicht × (1 + Wdh./30), bester Satz je Einheit.</div>`
+      : `<div class="sub" style="text-align:left">Sobald du Trainings einträgst, siehst du hier deine Entwicklung je Übung.</div>`}</div>
+    <div class="card"><h3>Körpergewicht</h3>
+      <div style="display:flex;gap:8px"><input type="text" inputmode="decimal" id="bwIn" value="${gym.settings.bodyweight ?? ""}" placeholder="z. B. 80"><button class="pill" id="bwSave">Speichern</button></div>
+      <div class="sub" style="text-align:left;margin-top:6px">Für die Muskel-Last (Volumen im Verhältnis zum Körpergewicht) und Körpergewichtsübungen. Ohne Angabe: 80 kg.</div></div>
+    <div class="card"><h3>Eigene Übungen</h3>
+      ${custom.map((e) => `<div class="jrow"><span class="l">${esc(e.name)} <span class="k" style="color:var(--muted);font-size:12px">· ${esc(e.group)}</span></span><button class="del" data-delex="${esc(e.id)}" aria-label="Entfernen">×</button></div>`).join("")}
+      <input type="text" id="exName" placeholder="Name, z. B. Bulgarian Split Squat" maxlength="60" style="margin-top:8px">
+      <div style="display:flex;gap:8px;margin-top:8px"><select id="exGroup">${["Brust","Rücken","Beine","Schultern","Arme","Core","Sonstige"].map((g) => `<option>${g}</option>`).join("")}</select>
+      <select id="exBw"><option value="0">Mit Gewicht</option><option value="0.65">Körpergewicht teilweise</option><option value="1">Körpergewicht voll</option></select></div>
+      <button class="primary" id="exAdd">Übung hinzufügen</button></div>`;
+  el.querySelectorAll("[data-plan]").forEach((b) => b.onclick = () => openPlanEditor(b.dataset.plan));
+  $("planNew").onclick = () => openPlanEditor(null);
+  if ($("progEx")) $("progEx").onchange = (ev) => { gymProgEx = ev.target.value; renderGym(); };
+  $("bwSave").onclick = () => saveGym({ settings: { bodyweight: Number($("bwIn").value.replace(",", ".")) } });
+  $("exAdd").onclick = () => {
+    const name = $("exName").value.trim(); if (!name) return;
+    saveGym({ exercises: [...gym.exercises, { id: "c_" + Date.now().toString(36), name, group: $("exGroup").value, bw: Number($("exBw").value) }] });
+  };
+  el.querySelectorAll("[data-delex]").forEach((b) => b.onclick = () => saveGym({ exercises: gym.exercises.filter((e) => e.id !== b.dataset.delex) }));
+}
+async function saveGym(patch){
+  try { gym = await api("/api/gym", { method:"PUT", body: JSON.stringify(patch) }); gymP = Promise.resolve(gym); renderGym(); }
+  catch (e) { if (e.message !== "401") alert("Fehler: " + e.message); }
+}
+
+let plan = null;
+function openPlanEditor(id){
+  const p = gym.plans.find((x) => x.id === id);
+  plan = p ? JSON.parse(JSON.stringify(p)) : { id: "p_" + Date.now().toString(36), name: "", items: [] };
+  openOverlay(`<div id="planBody"></div>`, renderPlanEditor);
+}
+function renderPlanEditor(){
+  const el = $("planBody"); if (!el) return;
+  el.innerHTML = `<div class="dhead" style="margin-top:-34px">Trainingsplan</div>
+    <div class="card"><h3>Name</h3><input type="text" id="plName" value="${esc(plan.name)}" placeholder="z. B. Oberkörper A" maxlength="60"></div>
+    ${plan.items.map((it, i) => `<div class="card" data-i="${i}"><div style="display:flex;gap:8px;align-items:center">${exSelect(it.exId, "plEx")}<button class="del" data-rm="${i}">×</button></div>
+      <div style="display:flex;gap:8px;margin-top:8px;align-items:center"><span class="k" style="color:var(--muted);font-size:13px">Sätze</span><input type="number" inputmode="numeric" class="plSets" value="${it.sets}" min="1" max="20" style="width:70px">
+      <span class="k" style="color:var(--muted);font-size:13px">Wdh.</span><input type="text" class="plReps" value="${esc(it.reps)}" style="width:90px"></div>
+      <div style="display:flex;gap:14px;margin-top:8px">${i > 0 ? `<button class="link" data-up="${i}">↑ nach oben</button>` : ""}</div></div>`).join("")}
+    <div class="card"><h3>Übung hinzufügen</h3>${exSelect("", "plAdd")}</div>
+    <button class="primary" id="plSave">Plan speichern</button>
+    ${gym.plans.some((x) => x.id === plan.id) ? `<button class="link" id="plDel" style="display:block;margin:16px auto;color:var(--red)">Plan löschen</button>` : ""}`;
+  $("plName").oninput = () => { plan.name = $("plName").value; };
+  el.querySelectorAll("[data-i]").forEach((card) => {
+    const it = plan.items[Number(card.dataset.i)];
+    card.querySelector(".plEx").onchange = (ev) => { it.exId = ev.target.value; };
+    card.querySelector(".plSets").oninput = (ev) => { it.sets = Math.max(1, Math.min(20, Number(ev.target.value) || 1)); };
+    card.querySelector(".plReps").oninput = (ev) => { it.reps = ev.target.value; };
+    card.querySelector("[data-rm]").onclick = () => { plan.items.splice(Number(card.dataset.i), 1); renderPlanEditor(); };
+    const up = card.querySelector("[data-up]");
+    if (up) up.onclick = () => { const i = Number(card.dataset.i); [plan.items[i - 1], plan.items[i]] = [plan.items[i], plan.items[i - 1]]; renderPlanEditor(); };
+  });
+  el.querySelector(".plAdd").onchange = (ev) => { if (ev.target.value) { plan.items.push({ exId: ev.target.value, sets: 3, reps: "8–12" }); renderPlanEditor(); } };
+  $("plSave").onclick = async () => {
+    if (!plan.name.trim()) { alert("Bitte gib dem Plan einen Namen."); return; }
+    const plans = gym.plans.filter((x) => x.id !== plan.id).concat([plan]);
+    await saveGym({ plans }); history.back();
+  };
+  if ($("plDel")) $("plDel").onclick = async () => { if (!confirm("Plan löschen?")) return; await saveGym({ plans: gym.plans.filter((x) => x.id !== plan.id) }); history.back(); };
+}
+
 // ---------- AKTIVITÄTEN ----------
 function renderActs(){
   const acts = day ? day.activities : [];
@@ -878,6 +1097,7 @@ function switchTab(t){
   document.querySelectorAll(".screen").forEach((s) => s.classList.toggle("on", s.id === "scr-" + t));
   if (t === "journal") renderJournal();
   if (t === "acts") renderActs();
+  if (t === "gym") renderGym();
   window.scrollTo(0, 0);
 }
 document.querySelectorAll(".tabbar button").forEach((b) => b.onclick = () => switchTab(b.dataset.tab));

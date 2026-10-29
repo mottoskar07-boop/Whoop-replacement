@@ -7,6 +7,7 @@
 
 import APP_HTML from "./app.html";
 import { ICON_SVG } from "./icon.js";
+import { normalizeGym, cleanExercises, cleanPlans, cleanWorkout } from "./gym.js";
 import { garminGet, garminGetRaw, GarminError } from "./garmin.js";
 import { addDays, buildDay, buildStress, buildHrvNight } from "./scores.js";
 
@@ -48,6 +49,7 @@ const isDate = (s) => typeof s === "string" && /^\d{4}-\d{2}-\d{2}$/.test(s);
 async function loadDay(env, D, fresh) {
   const hit = dayCache.get(D);
   if (hit && Date.now() - hit.t < (fresh ? 15000 : DAY_CACHE_MS)) return hit.body;
+  const gym = env.DATA ? normalizeGym(await env.DATA.get("gym", "json")) : null;
   const from = addDays(D, -WINDOW_DAYS);
   const [activities, hrv, sleep, summaries] = await Promise.all([
     garminGet(env, `/activitylist-service/activities/search/activities?startDate=${from}&endDate=${D}&limit=99`),
@@ -55,7 +57,7 @@ async function loadDay(env, D, fresh) {
     garminGet(env, `/sleep-service/sleep/dailySleepSummariesByDate?startDate=${from}&endDate=${D}`),
     garminGet(env, `/usersummary-service/v2/dailysummaries?startDate=${from}&endDate=${D}`),
   ]);
-  const body = buildDay(D, { activities, hrv, sleep, summaries }, WINDOW_DAYS);
+  const body = buildDay(D, { activities, hrv, sleep, summaries, gym }, WINDOW_DAYS);
   // HRV-Verlauf der Nacht (Garmin misst HRV nur im Schlaf)
   try {
     const h = await garminGet(env, `/hrv-service/hrv/${D}`);
@@ -123,6 +125,36 @@ async function handleApi(request, env, url) {
     for (const [k, v] of Object.entries(body.answers)) if (typeof v === "boolean") answers[String(k).slice(0, 40)] = v;
     entries[m[1]] = { answers, note: String(body.note || "").slice(0, 500), savedAt: new Date().toISOString() };
     await env.DATA.put("journal", JSON.stringify(entries));
+    return json({ ok: true });
+  }
+
+  if (p === "/api/gym" && request.method === "GET") return json(normalizeGym(await env.DATA.get("gym", "json")));
+
+  // Übungen, Pläne und Einstellungen (Körpergewicht) speichern
+  if (p === "/api/gym" && request.method === "PUT") {
+    const body = await request.json().catch(() => null);
+    if (!body) return json({ error: "Daten fehlen" }, 400);
+    const gym = normalizeGym(await env.DATA.get("gym", "json"));
+    if (body.exercises) { const e = cleanExercises(body.exercises); if (e) gym.exercises = normalizeGym({ exercises: e }).exercises; }
+    if (body.plans) { const pl = cleanPlans(body.plans); if (pl) gym.plans = pl; }
+    if (body.settings) { const bw = Number(body.settings.bodyweight); gym.settings.bodyweight = isFinite(bw) && bw >= 30 && bw <= 250 ? bw : null; }
+    await env.DATA.put("gym", JSON.stringify({ ...gym, exercises: gym.exercises.filter((e) => /^c_/.test(e.id)) }));
+    dayCache.clear();
+    return json(gym);
+  }
+
+  // Eingetragenes Krafttraining zu einer Garmin-Aktivität
+  const wm = p.match(/^\/api\/gym\/workout\/(\d{1,20})$/);
+  if (wm && (request.method === "PUT" || request.method === "DELETE")) {
+    const gym = normalizeGym(await env.DATA.get("gym", "json"));
+    if (request.method === "DELETE") delete gym.workouts[wm[1]];
+    else {
+      const w = cleanWorkout(await request.json().catch(() => null));
+      if (!w) return json({ error: "Training ungültig" }, 400);
+      gym.workouts[wm[1]] = w;
+    }
+    await env.DATA.put("gym", JSON.stringify({ ...gym, exercises: gym.exercises.filter((e) => /^c_/.test(e.id)) }));
+    dayCache.clear();
     return json({ ok: true });
   }
 

@@ -1,7 +1,9 @@
 // Berechnet Recovery, Strain und Sleep aus den Garmin-Rohdaten.
-// Formeln übernommen aus garmin/build_dashboard.py (Recovery: HRV 50 %,
-// Ruhepuls 25 %, Schlafleistung 25 %; Strain: logarithmisch 0–21 aus
-// Garmins Trainingsbelastung). Schlafbedarf bevorzugt Garmins eigenen Wert.
+// Recovery: HRV 50 %, Ruhepuls 25 %, Garmin Sleep Score 25 % (Formel aus
+// garmin/build_dashboard.py). Strain: siehe unten (Whoop-Prinzip, sättigend 0–21).
+// Schlafbedarf bevorzugt Garmins eigenen Wert.
+
+import { muscleLoad } from "./gym.js";
 
 const BASELINE_SLEEP_HOURS = 8.0;
 const MIN_BASELINE_DAYS = 5;
@@ -47,14 +49,17 @@ export function recoveryFactor(recovery) {
   return recovery == null ? 1 : clamp(1 + (50 - recovery) / 125, 0.8, 1.3);
 }
 
-function activityLoad(a) {
+export const isStrength = (type) => /strength|weight|crossfit|hiit/i.test(type || "");
+
+// gym: eingetragene Krafttrainings; ohne Eintrag Schätzung aus Dauer bzw. Garmin-Sätzen
+function activityLoad(a, gym) {
   const cardio = [1, 2, 3, 4, 5].reduce((s, z, i) => s + ((num(a["hrTimeInZone_" + z]) || 0) / 60) * ZONE_WEIGHTS[i], 0);
-  const type = activityType(a) || "";
+  const workout = gym && gym.workouts[String(a.activityId)];
+  const logged = workout ? muscleLoad(workout, gym) : null;
   let muscle = 0;
-  if (/strength|weight|crossfit|hiit/i.test(type)) {
-    muscle = Math.max(((num(a.duration) || 0) / 60) * 0.5, (num(a.totalSets) || 0) * 1.5);
-  }
-  return { cardio, muscle };
+  if (logged) muscle = logged.load;
+  else if (isStrength(activityType(a))) muscle = Math.max(((num(a.duration) || 0) / 60) * 0.5, (num(a.totalSets) || 0) * 1.5);
+  return { cardio, muscle, logged };
 }
 
 export function recoveryBand(r) {
@@ -79,8 +84,8 @@ function activityType(a) {
   return t && typeof t === "object" ? t.typeKey || null : t || null;
 }
 
-export function summarizeActivity(a) {
-  const { cardio, muscle } = activityLoad(a);
+export function summarizeActivity(a, gym) {
+  const { cardio, muscle, logged } = activityLoad(a, gym);
   return {
     id: a.activityId,
     name: a.activityName || "Aktivität",
@@ -95,6 +100,8 @@ export function summarizeActivity(a) {
     maxHR: num(a.maxHR),
     calories: num(a.calories),
     elevationGain: num(a.elevationGain),
+    strength: isStrength(activityType(a)),
+    workout: logged ? { volume: logged.volume, sets: logged.sets, reps: logged.reps, exercises: logged.exercises } : null,
     garminLoad: num(a.activityTrainingLoad),
     cardioLoad: cardio,
     muscleLoad: muscle,
@@ -125,7 +132,7 @@ export function buildDay(D, raw, windowDays = 30) {
   const sumBy = {};
   for (const s of (raw.summaries && raw.summaries.data) || []) if (s && s.calendarDate) sumBy[s.calendarDate] = s;
 
-  const acts = (raw.activities || []).map(summarizeActivity).sort((a, b) => (b.start || "").localeCompare(a.start || ""));
+  const acts = (raw.activities || []).map((a) => summarizeActivity(a, raw.gym)).sort((a, b) => (b.start || "").localeCompare(a.start || ""));
   const actsBy = {};
   for (const a of acts) (actsBy[a.date] = actsBy[a.date] || []).push(a);
 
