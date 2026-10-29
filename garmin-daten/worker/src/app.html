@@ -311,7 +311,7 @@ function renderHome(){
     const s = d.stats;
     const rows = [
       ["HRV", s.hrv, 0, " ms", 1], ["Ruhepuls", s.rhr, 0, " bpm", -1], ["Atemfrequenz", s.respiration, 1, " /min", 0],
-      ["Schlafdauer", s.sleepHours, null, " h", 1], ["Body Battery max", s.bodyBattery, 0, "", 1],
+      ["Garmin Sleep Score", s.sleepScore, 0, "", 1], ["Schlafdauer", s.sleepHours, null, " h", 1], ["Body Battery max", s.bodyBattery, 0, "", 1],
       ["Ø Stress", s.stress, 0, "", -1], ["Schritte", s.steps, 0, "", 1], ["Kalorien", s.calories, 0, " kcal", 0],
     ];
     $("stats").innerHTML = rows.map(([k, o, dec, unit, good]) => {
@@ -488,12 +488,12 @@ function openDetail(kind){
         ${mrow("Herzfrequenzvariabilität", st.hrv.value != null ? fmt(st.hrv.value) : "–", { trend: trend(st.hrv, 1) })}
         ${mrow("Ruheherzfrequenz", st.rhr.value != null ? fmt(st.rhr.value) : "–", { trend: trend(st.rhr, -1) })}
         ${mrow("Atemfrequenz", st.respiration.value != null ? fmt(st.respiration.value, 1) : "–", { trend: trend(st.respiration, 0) })}
-        ${mrow("Schlafleistung", d.sleep && d.sleep.performance != null ? fmt(d.sleep.performance) + " %" : "–", { trend: trend(st.sleepPerf, 1) })}
+        ${mrow("Garmin Sleep Score", st.sleepScore.value != null ? fmt(st.sleepScore.value) : "–", { trend: trend(st.sleepScore, 1) })}
         ${LEG_TREND}
       </div>
       <div class="insight">${esc(recoveryText(d))}${r ? ` Empfohlene Belastung: ${fmt(d.strain.target[0],1)}–${fmt(d.strain.target[1],1)}.` : ""}</div>
       <div class="card"><h3>Erholung · 30 Tage</h3>${barsHtml(hist, (h) => h.recovery, (h) => bandColor(h.band), 100)}</div>
-      <div class="sub">Berechnung: HFV gegenüber deiner Basis (${r && r.hrvBaseline != null ? fmt(r.hrvBaseline) + " ms" : "–"}, 50 %), RHF gegenüber deiner Basis (${r && r.rhrBaseline != null ? fmt(r.rhrBaseline,1) + " bpm" : "–"}, 25 %), Schlafleistung (25 %). Grün ab 67 %, Gelb ab 34 %.${r && r.hrvStatus ? " Garmin HRV-Status: " + esc(r.hrvStatus) + "." : ""}</div>`);
+      <div class="sub">Berechnung: HFV gegenüber deiner Basis (${r && r.hrvBaseline != null ? fmt(r.hrvBaseline) + " ms" : "–"}, 50 %), RHF gegenüber deiner Basis (${r && r.rhrBaseline != null ? fmt(r.rhrBaseline,1) + " bpm" : "–"}, 25 %), Garmin Sleep Score (25 %; fehlt er, die Schlafleistung). Grün ab 67 %, Gelb ab 34 %.${r && r.hrvStatus ? " Garmin HRV-Status: " + esc(r.hrvStatus) + "." : ""}</div>`);
   }
   if (kind === "strain") {
     const s = d.strain, t = s.target;

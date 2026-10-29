@@ -121,6 +121,11 @@ export function buildDay(D, raw, windowDays = 30) {
     return { hours: BASELINE_SLEEP_HOURS + fStrain + debt - naps, source: "formel" };
   }
 
+  function garminSleepScore(d) {
+    const o = sleepBy[d] && sleepBy[d].sleepScores && sleepBy[d].sleepScores.overall;
+    return o ? num(o.value) : null;
+  }
+
   function sleepPerf(d) {
     const s = sleepSecOf(d);
     if (s == null || s < 1800) return null;
@@ -152,8 +157,9 @@ export function buildDay(D, raw, windowDays = 30) {
     if (h != null && hb) parts.hrv = clamp(50 + 20 * ((h - hb.mean) / hb.sd), 0, 100);
     const rb = rhrBaseline(d), r = rhrOf(d);
     if (r != null && rb) parts.rhr = clamp(50 - 20 * ((r - rb.mean) / rb.sd), 0, 100);
-    const sp = sleepPerf(d);
-    if (sp != null) parts.sleep = sp;
+    // Schlafanteil: Garmins Sleep Score (Dauer + Qualität); fehlt er, Schlafleistung (Dauer / Bedarf)
+    const gs = garminSleepScore(d), sp = sleepPerf(d);
+    if (gs != null) parts.sleep = gs; else if (sp != null) parts.sleep = sp;
     const w = Object.keys(parts).reduce((s, k) => s + weights[k], 0);
     if (!w) return null;
     const score = Object.keys(parts).reduce((s, k) => s + (weights[k] / w) * parts[k], 0);
@@ -229,6 +235,7 @@ export function buildDay(D, raw, windowDays = 30) {
     zones45: stat((d) => zoneSum(d, [3, 4])),
     strengthS: stat(strengthOf),
     sleepPerf: stat(sleepPerf),
+    sleepScore: stat(garminSleepScore),
   };
 
   const history = dates.map((d) => {
