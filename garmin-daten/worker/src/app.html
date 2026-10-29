@@ -500,7 +500,7 @@ function openActivity(id){
   const run = /run|walk|hik/i.test(a.type || "");
   const speed = a.avgSpeed ? (run ? (() => { const sPerKm = 1000 / a.avgSpeed; return Math.floor(sPerKm / 60) + ":" + String(Math.round(sPerKm % 60)).padStart(2,"0") + " /km"; })() : fmt(a.avgSpeed * 3.6, 1) + " km/h") : null;
   const rows = [
-    ["Datum", new Date(a.start.replace(" ", "T")).toLocaleString("de-DE", { weekday:"short", day:"2-digit", month:"2-digit", hour:"2-digit", minute:"2-digit" })],
+    a.start && ["Datum", new Date(a.start).toLocaleString("de-DE", { weekday:"short", day:"2-digit", month:"2-digit", hour:"2-digit", minute:"2-digit" })],
     ["Dauer", hmS(a.durationS) + " h"], a.distanceM ? ["Distanz", fmt(a.distanceM / 1000, 2) + " km"] : null,
     speed ? [run ? "Ø Pace" : "Ø Tempo", speed] : null,
     a.avgHR ? ["Puls Ø / max", fmt(a.avgHR) + " / " + fmt(a.maxHR) + " bpm"] : null,

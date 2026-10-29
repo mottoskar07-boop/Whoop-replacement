@@ -12,6 +12,14 @@ export function addDays(dateStr, n) {
   return d.toISOString().slice(0, 10);
 }
 
+// Garmin liefert "...Local"-Zeitstempel je nach Endpunkt als Text oder als
+// Millisekunden-Zahl (auf Ortszeit verschoben). Einheitlich: "YYYY-MM-DDTHH:MM:SS".
+export function localTs(ts) {
+  if (typeof ts === "number" && isFinite(ts)) return new Date(ts).toISOString().slice(0, 19);
+  if (typeof ts === "string" && ts.length >= 16) return ts.replace(" ", "T").slice(0, 19);
+  return null;
+}
+
 const clamp = (x, lo, hi) => Math.max(lo, Math.min(hi, x));
 const mean = (a) => a.reduce((s, v) => s + v, 0) / a.length;
 const sd = (a) => { const m = mean(a); return Math.sqrt(mean(a.map((v) => (v - m) ** 2))); };
@@ -49,8 +57,8 @@ export function summarizeActivity(a) {
     id: a.activityId,
     name: a.activityName || "Aktivität",
     type: activityType(a),
-    start: a.startTimeLocal || null,
-    date: (a.startTimeLocal || "").slice(0, 10),
+    start: localTs(a.startTimeLocal),
+    date: (localTs(a.startTimeLocal) || "").slice(0, 10),
     durationS: num(a.duration),
     movingS: num(a.movingDuration),
     distanceM: num(a.distance),
@@ -96,7 +104,7 @@ export function buildDay(D, raw, windowDays = 30) {
   const zoneSum = (d, zs) => (actsBy[d] || []).reduce((s, a) => s + zs.reduce((t, z) => t + a.zones[z], 0), 0);
   const strengthOf = (d) => (actsBy[d] || []).filter((a) => /strength/i.test(a.type || "")).reduce((s, a) => s + (a.durationS || 0), 0);
   // Minuten seit 12:00 mittags, damit Zeiten um Mitternacht vergleichbar sind
-  const clockMin = (ts) => { const m = /T?(\d{2}):(\d{2})/.exec((ts || "").slice(10)); return m ? (Number(m[1]) * 60 + Number(m[2]) + 720) % 1440 : null; };
+  const clockMin = (ts) => { const t = localTs(ts); return t ? (Number(t.slice(11, 13)) * 60 + Number(t.slice(14, 16)) + 720) % 1440 : null; };
 
   const dayLoad = (d) => (actsBy[d] || []).reduce((s, a) => s + a.load, 0) + 4.0;
   const strainOf = (d) => (d in sumBy || d in actsBy || d === D ? strainFromLoad(dayLoad(d)) : null);
@@ -170,7 +178,7 @@ export function buildDay(D, raw, windowDays = 30) {
     garminQualifier: scoreItem ? scoreItem.qualifierKey || null : null,
     deepS: num(sDto.deepSleepSeconds), lightS: num(sDto.lightSleepSeconds),
     remS: num(sDto.remSleepSeconds), awakeS: num(sDto.awakeSleepSeconds),
-    start: sDto.sleepStartTimestampLocal || null, end: sDto.sleepEndTimestampLocal || null,
+    start: localTs(sDto.sleepStartTimestampLocal), end: localTs(sDto.sleepEndTimestampLocal),
     respiration: num(sDto.averageRespirationValue),
     avgHR: num(sDto.avgHeartRate),
     spo2: num(sDto.averageSpO2Value),
