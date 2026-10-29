@@ -1,0 +1,636 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#101518">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/icon.svg">
+<link rel="apple-touch-icon" href="/icon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@600;700;800&display=swap" rel="stylesheet">
+<title>Recovery</title>
+<style>
+  :root{
+    --bg-top:#283339; --bg:#101518; --card:#1a2227; --card2:#222c32; --line:rgba(255,255,255,.08);
+    --text:#ffffff; --muted:rgba(255,255,255,.55); --faint:rgba(255,255,255,.12);
+    --sleep:#7BA1BB; --strain:#0093E7; --green:#16EC06; --yellow:#FFDE00; --red:#FF0026;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;min-height:100%;}
+  body{background:linear-gradient(180deg,var(--bg-top) 0%,var(--bg) 420px) no-repeat,var(--bg);color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"Roboto","Segoe UI",sans-serif;font-variant-numeric:tabular-nums;
+    padding-bottom:calc(76px + env(safe-area-inset-bottom));}
+  button{font:inherit;color:inherit;background:none;border:none;padding:0;cursor:pointer;}
+  .wrap{max-width:480px;margin:0 auto;padding:calc(10px + env(safe-area-inset-top)) 16px 16px;}
+  .topbar{display:flex;align-items:center;justify-content:space-between;height:44px;}
+  .datenav{display:flex;align-items:center;gap:6px;font-weight:700;letter-spacing:.08em;font-size:14px;text-transform:uppercase;}
+  .datenav button{width:32px;height:32px;border-radius:50%;font-size:18px;color:var(--muted);}
+  .datenav button:disabled{opacity:.25;}
+  .iconbtn{width:36px;height:36px;border-radius:50%;display:grid;place-items:center;color:var(--muted);}
+  .iconbtn.spin svg{animation:spin 1s linear infinite;}
+  @keyframes spin{to{transform:rotate(360deg);}}
+  .dials{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:18px 0 6px;}
+  .dial{display:flex;flex-direction:column;align-items:center;}
+  .dial svg{width:100%;max-width:112px;height:auto;display:block;}
+  .dial .label{margin-top:10px;font-size:12px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;display:flex;align-items:center;gap:3px;}
+  .dial .label .chev{color:var(--muted);font-weight:400;}
+  .ringnum{font-weight:700;fill:#fff;}
+  .ringunit{font-weight:700;fill:#fff;}
+  .status{text-align:center;color:var(--muted);font-size:12px;margin:12px 0 4px;min-height:16px;}
+  .card{background:var(--card);border-radius:14px;padding:14px 16px;margin:12px 0;}
+  .card h3{margin:0 0 10px;font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);font-weight:700;}
+  .warn{background:rgba(255,222,0,.08);color:#ffe866;font-size:13px;border-radius:12px;padding:10px 12px;margin:8px 0;line-height:1.4;}
+  .err{background:rgba(255,0,38,.1);color:#ff7d8e;font-size:13px;border-radius:12px;padding:10px 12px;margin:8px 0;line-height:1.4;}
+  .cta{display:flex;align-items:center;justify-content:space-between;width:100%;text-align:left;}
+  .cta .t{font-weight:700;font-size:15px;} .cta .s{color:var(--muted);font-size:12px;margin-top:2px;}
+  .pill{background:#fff;color:#101518;font-weight:800;font-size:12px;letter-spacing:.06em;text-transform:uppercase;border-radius:20px;padding:8px 14px;}
+  .act{display:flex;align-items:center;gap:12px;padding:10px 0;border-top:1px solid var(--line);width:100%;text-align:left;}
+  .act:first-of-type{border-top:none;}
+  .badge{min-width:48px;height:48px;border-radius:10px;background:rgba(0,147,231,.18);color:var(--strain);display:grid;place-items:center;font-weight:800;font-size:16px;}
+  .act .n{font-weight:700;font-size:15px;} .act .m{color:var(--muted);font-size:12px;margin-top:3px;}
+  .act .grow{flex:1;min-width:0;} .act .chev{color:var(--muted);}
+  .stat{display:grid;grid-template-columns:1fr auto auto;gap:10px;align-items:center;padding:10px 0;border-top:1px solid var(--line);font-size:14px;}
+  .stat:first-of-type{border-top:none;}
+  .stat .v{font-weight:700;text-align:right;} .stat .a{color:var(--muted);font-size:12px;text-align:right;min-width:86px;}
+  .up{color:var(--green);} .down{color:var(--red);} .flat{color:var(--muted);}
+  .tabbar{position:fixed;left:0;right:0;bottom:0;background:rgba(16,21,24,.96);border-top:1px solid var(--line);
+    display:flex;justify-content:space-around;padding:8px 0 calc(8px + env(safe-area-inset-bottom));backdrop-filter:blur(10px);z-index:20;}
+  .tabbar button{display:flex;flex-direction:column;align-items:center;gap:3px;font-size:11px;font-weight:600;color:var(--muted);letter-spacing:.04em;min-width:80px;}
+  .tabbar button.on{color:#fff;}
+  .screen{display:none;} .screen.on{display:block;}
+  .overlay{position:fixed;inset:0;background:var(--bg);z-index:30;overflow-y:auto;display:none;}
+  .overlay.on{display:block;}
+  .overlay .wrap{padding-bottom:40px;}
+  .back{display:flex;align-items:center;gap:6px;color:var(--muted);font-size:14px;font-weight:600;height:44px;}
+  .bigdial{display:flex;flex-direction:column;align-items:center;margin:8px 0 6px;}
+  .bigdial svg{width:62%;max-width:230px;height:auto;}
+  .bigtitle{font-size:12px;letter-spacing:.12em;text-transform:uppercase;font-weight:700;margin-top:12px;}
+  .sub{color:var(--muted);font-size:13px;text-align:center;margin-top:6px;line-height:1.4;}
+  .row{display:flex;justify-content:space-between;align-items:baseline;gap:12px;padding:9px 0;border-top:1px solid var(--line);font-size:14px;}
+  .row:first-of-type{border-top:none;} .row .k{color:var(--muted);flex-shrink:0;} .row .v{font-weight:700;text-align:right;}
+  .bars{display:flex;align-items:flex-end;gap:3px;height:96px;margin-top:6px;}
+  .bars div{flex:1;border-radius:3px 3px 1px 1px;min-height:3px;background:var(--faint);}
+  .bars div.sel{outline:2px solid #fff;outline-offset:1px;}
+  .barlabels{display:flex;justify-content:space-between;color:var(--muted);font-size:10px;margin-top:5px;}
+  .stages{display:flex;height:14px;border-radius:7px;overflow:hidden;margin:6px 0 10px;}
+  .legend{display:grid;grid-template-columns:1fr 1fr;gap:6px 14px;font-size:13px;}
+  .legend span{display:flex;align-items:center;gap:6px;} .dot{width:9px;height:9px;border-radius:50%;}
+  .zones{display:flex;height:10px;border-radius:5px;overflow:hidden;margin-top:8px;background:var(--faint);}
+  .track{position:relative;height:8px;border-radius:4px;background:var(--faint);margin:14px 0 6px;}
+  .track .band{position:absolute;top:0;bottom:0;border-radius:4px;background:rgba(0,147,231,.35);}
+  .track .mark{position:absolute;top:-5px;width:4px;height:18px;border-radius:2px;background:#fff;}
+  .scale{display:flex;justify-content:space-between;color:var(--muted);font-size:10px;}
+  .jrow{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:11px 0;border-top:1px solid var(--line);}
+  .jrow:first-of-type{border-top:none;} .jrow .l{font-size:15px;flex:1;}
+  .yn{display:flex;gap:6px;}
+  .yn button{min-width:52px;height:34px;border-radius:17px;border:1px solid rgba(255,255,255,.22);font-weight:700;font-size:13px;color:var(--muted);}
+  .yn button.yes{background:#fff;color:#101518;border-color:#fff;}
+  .yn button.no{background:var(--card2);color:#fff;border-color:var(--card2);}
+  .del{color:var(--red);font-size:20px;width:32px;}
+  textarea,input[type=text],input[type=password]{width:100%;background:var(--card2);border:1px solid var(--line);border-radius:10px;color:#fff;
+    font:inherit;font-size:15px;padding:11px 12px;outline:none;}
+  textarea{min-height:70px;resize:vertical;}
+  .primary{width:100%;background:#fff;color:#101518;font-weight:800;letter-spacing:.06em;text-transform:uppercase;border-radius:24px;padding:14px;font-size:14px;margin-top:12px;}
+  .primary:disabled{opacity:.5;}
+  .link{color:var(--sleep);font-weight:600;font-size:14px;}
+  .ins{padding:10px 0;border-top:1px solid var(--line);} .ins:first-of-type{border-top:none;}
+  .ins .l{font-size:14px;font-weight:600;} .ins .d{font-size:13px;color:var(--muted);margin-top:3px;}
+  .center{text-align:center;}
+  .login{min-height:80vh;display:flex;flex-direction:column;justify-content:center;gap:12px;}
+  .login h1{font-size:22px;margin:0;text-align:center;letter-spacing:.04em;}
+  .grp{color:var(--muted);font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;margin:16px 0 4px;}
+  .datenav{background:rgba(255,255,255,.06);border-radius:22px;padding:3px;gap:2px;}
+  .datenav .cur{background:rgba(255,255,255,.1);border-radius:18px;padding:7px 22px;font-size:13px;letter-spacing:.1em;}
+  .ringnum{font-family:"Barlow",-apple-system,sans-serif;font-weight:700;fill:#fff;}
+  .ringlabel{font-size:5px;font-weight:700;letter-spacing:.12em;fill:#fff;}
+  .dial .label{font-size:12.5px;letter-spacing:.12em;}
+  .back{position:relative;z-index:2;}
+  .dhead{text-align:center;font-weight:700;font-size:13px;letter-spacing:.12em;text-transform:uppercase;margin-top:-34px;height:34px;line-height:34px;pointer-events:none;}
+  .overlay{background:linear-gradient(180deg,var(--bg-top) 0%,var(--bg) 420px) no-repeat,var(--bg);}
+  .mcard{background:var(--card);border-radius:14px;padding:4px 16px 12px;margin:14px 0 12px;}
+  .mrow{display:flex;align-items:center;gap:10px;padding:14px 0;border-bottom:1px solid var(--line);}
+  .mrow .ml{flex:1;font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;}
+  .mrow .mv{font-family:"Barlow",sans-serif;font-weight:700;font-size:19px;min-width:44px;text-align:right;}
+  .mrow .tr{font-size:11px;width:12px;text-align:center;}
+  .mbar{display:flex;gap:3px;} .mbar i{display:block;width:16px;height:4px;border-radius:2px;}
+  .legbox{display:flex;align-items:center;gap:6px;background:rgba(0,0,0,.25);border-radius:8px;padding:9px 12px;margin-top:12px;font-size:13px;color:var(--muted);flex-wrap:wrap;}
+  .legbox b{color:#fff;} .legbox span{display:inline-flex;align-items:center;gap:6px;margin-right:10px;}
+  .legbox i{display:inline-block;width:14px;height:4px;border-radius:2px;}
+  .insight{border:1.5px solid #3d4fa8;border-radius:14px;padding:14px 16px;font-size:15px;line-height:1.45;margin:12px 0;}
+  .coach{padding:16px;} .coach .t{font-weight:700;font-size:16px;} .coach .s{color:rgba(255,255,255,.7);font-size:14px;line-height:1.45;margin-top:6px;}
+  .up{color:#00F19F;} .down{color:#FFA800;}
+</style>
+</head>
+<body>
+
+<div id="login" class="wrap login" style="display:none">
+  <h1>RECOVERY</h1>
+  <div class="sub">Gib deinen Zugangscode ein (der Wert von APP_CODE).</div>
+  <input id="codeInput" type="password" autocomplete="current-password" placeholder="Zugangscode">
+  <button class="primary" id="codeBtn">Anmelden</button>
+  <div id="loginErr" class="err" style="display:none"></div>
+</div>
+
+<div id="app" style="display:none">
+  <!-- HEUTE -->
+  <section class="screen on" id="scr-home"><div class="wrap">
+    <div class="topbar">
+      <div style="width:36px"></div>
+      <div class="datenav">
+        <button id="prevDay" aria-label="Vorheriger Tag">‹</button>
+        <span class="cur" id="dateLabel">Heute</span>
+        <button id="nextDay" aria-label="Nächster Tag">›</button>
+      </div>
+      <button class="iconbtn" id="refreshBtn" aria-label="Aktualisieren">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M20 12a8 8 0 1 1-2.34-5.66"/><path d="M20 4v5h-5"/></svg>
+      </button>
+    </div>
+    <div class="dials">
+      <button class="dial" data-open="sleep"><div id="dialSleep"></div><div class="label">Schlaf</div></button>
+      <button class="dial" data-open="recovery"><div id="dialRecovery"></div><div class="label">Erholung</div></button>
+      <button class="dial" data-open="strain"><div id="dialStrain"></div><div class="label">Belastung</div></button>
+    </div>
+    <div class="status" id="status"></div>
+    <div id="coach"></div>
+    <div id="msgs"></div>
+    <div id="journalCta"></div>
+    <div class="card"><h3>Aktivitäten</h3><div id="todayActs"></div></div>
+    <div class="card"><h3>Schlüsselwerte · vs. 30 Tage</h3><div id="stats"></div></div>
+  </div></section>
+
+  <!-- JOURNAL -->
+  <section class="screen" id="scr-journal"><div class="wrap">
+    <div class="topbar">
+      <div style="width:36px"></div>
+      <div class="datenav">
+        <button id="jPrev" aria-label="Vorheriger Tag">‹</button>
+        <span class="cur" id="jDate"></span>
+        <button id="jNext" aria-label="Nächster Tag">›</button>
+      </div>
+      <div style="width:36px"></div>
+    </div>
+    <div class="sub" style="margin-bottom:6px">Was hast du an diesem Tag gemacht? Es wirkt sich auf die Erholung am nächsten Morgen aus.</div>
+    <div id="jMsg"></div>
+    <div class="card" id="jList"></div>
+    <div class="card"><h3>Notiz</h3><textarea id="jNote" placeholder="Optional"></textarea></div>
+    <button class="primary" id="jSave">Speichern</button>
+    <div class="status" id="jStatus"></div>
+    <div class="card"><h3>Auswirkung auf deine Erholung</h3><div id="insights"></div></div>
+    <div class="card"><h3>Verhalten bearbeiten</h3><div id="bEdit"></div>
+      <div style="display:flex;gap:8px;margin-top:10px"><input type="text" id="bNew" placeholder="Neues Verhalten, z. B. Ashwagandha" maxlength="60"><button class="pill" id="bAdd">+</button></div>
+    </div>
+  </div></section>
+
+  <!-- AKTIVITÄTEN -->
+  <section class="screen" id="scr-acts"><div class="wrap">
+    <div class="topbar"><div></div><div class="datenav">Aktivitäten · 30 Tage</div><div></div></div>
+    <div id="actList"></div>
+  </div></section>
+
+  <nav class="tabbar">
+    <button data-tab="home" class="on"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3"/></svg>Heute</button>
+    <button data-tab="journal"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 8h6M9 12h6M9 16h4"/></svg>Journal</button>
+    <button data-tab="acts"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg>Aktivitäten</button>
+  </nav>
+</div>
+
+<div class="overlay" id="detail"><div class="wrap">
+  <button class="back" id="detailBack">‹ Zurück</button>
+  <div id="detailBody"></div>
+</div></div>
+
+<script>
+"use strict";
+const C = { sleep:"#7BA1BB", strain:"#0093E7", green:"#16EC06", yellow:"#FFDE00", red:"#FF0026" };
+const BAND_TXT = { green:"Hohe Erholung", yellow:"Mittlere Erholung", red:"Niedrige Erholung" };
+const ZONE_C = ["#5d6d78","#3FA9F5","#16EC06","#FFA800","#FF0026"];
+const $ = (id) => document.getElementById(id);
+const store = {
+  get(k){ try { return localStorage.getItem(k); } catch { return null; } },
+  set(k,v){ try { localStorage.setItem(k,v); } catch {} },
+  del(k){ try { localStorage.removeItem(k); } catch {} },
+};
+const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
+const fmt = (v, d = 0) => v == null || !isFinite(v) ? "–" : Number(v).toLocaleString("de-DE", { minimumFractionDigits:d, maximumFractionDigits:d });
+const hm = (h) => { if (h == null) return "–"; const m = Math.round(h * 60); return Math.floor(m / 60) + ":" + String(m % 60).padStart(2, "0"); };
+const hmS = (s) => s == null ? "–" : hm(s / 3600);
+function localISO(d){ const z = new Date(d.getTime() - d.getTimezoneOffset() * 60000); return z.toISOString().slice(0,10); }
+const today = () => localISO(new Date());
+function addDays(s, n){ const d = new Date(s + "T12:00:00"); d.setDate(d.getDate() + n); return localISO(d); }
+function dateLabel(s){
+  if (s === today()) return "Heute";
+  if (s === addDays(today(), -1)) return "Gestern";
+  return new Date(s + "T12:00:00").toLocaleDateString("de-DE", { weekday:"short", day:"2-digit", month:"2-digit" });
+}
+const bandColor = (b) => b ? C[b] : "rgba(255,255,255,.25)";
+
+// Ring: Startpunkt oben, im Uhrzeigersinn
+function ring(frac, color, text, unit, size, _s, extra = {}){
+  const big = size === "big", stroke = big ? 5.5 : 7;
+  const r = (100 - stroke) / 2 - 1, c = 2 * Math.PI * r, f = frac == null ? 0 : Math.max(0, Math.min(1, frac));
+  let marker = "";
+  if (extra.marker != null) {
+    const ang = (extra.marker * 360 - 90) * Math.PI / 180, r1 = r - stroke / 2 - 0.5, r2 = r + stroke / 2 + 0.5;
+    marker = `<line x1="${50 + r1 * Math.cos(ang)}" y1="${50 + r1 * Math.sin(ang)}" x2="${50 + r2 * Math.cos(ang)}" y2="${50 + r2 * Math.sin(ang)}" stroke="#fff" stroke-width="1.4"/>`;
+  }
+  const ny = big ? (extra.label ? 56 : 58) : 57.5, fs = big ? 23 : 25;
+  return `<svg viewBox="0 0 100 100" role="img">
+    <circle cx="50" cy="50" r="${r}" fill="none" stroke="rgba(255,255,255,.13)" stroke-width="${stroke}"/>
+    <circle cx="50" cy="50" r="${r}" fill="none" stroke="${color}" stroke-width="${stroke}"
+      stroke-dasharray="${(c * f).toFixed(2)} ${c.toFixed(2)}" transform="rotate(-90 50 50)" style="transition:stroke-dasharray .6s ease"/>
+    ${marker}
+    <text x="50" y="${ny}" text-anchor="middle" class="ringnum" font-size="${fs}">${text}${unit ? `<tspan font-size="${fs * 0.55}" dx="${big ? 1.5 : 2}">${unit}</tspan>` : ""}</text>
+    ${big && extra.label ? `<text x="50" y="67" text-anchor="middle" class="ringlabel">${extra.label.toUpperCase()}</text>` : ""}
+  </svg>`;
+}
+
+let code = store.get("appCode");
+let curDate = today();
+let day = null;           // Antwort von /api/day
+let journal = null;       // { entries, behaviors }
+let jDate = addDays(today(), -1);
+let jDraft = null;
+let loading = false;
+
+async function api(path, opts = {}){
+  const res = await fetch(path, { ...opts, headers: { "x-app-code": code, "content-type":"application/json", ...(opts.headers || {}) } });
+  const body = await res.json().catch(() => ({}));
+  if (res.status === 401) { store.del("appCode"); code = null; showLogin("Zugangscode falsch."); throw new Error("401"); }
+  if (!res.ok) {
+    let msg = body.error || ("Fehler " + res.status);
+    if (body.garminStatus === 429) msg = "Garmin meldet zu viele Anfragen. Bitte später erneut versuchen" + (body.retryAfter ? " (in " + body.retryAfter + " s)." : ".");
+    else if (body.garminStatus === 401 || body.garminStatus === 403) msg = "Garmin lehnt den Schlüssel ab (" + body.garminStatus + "). Ist der API-Schlüssel abgelaufen oder gelöscht?";
+    throw new Error(msg);
+  }
+  return body;
+}
+
+function showLogin(err){
+  $("app").style.display = "none"; $("login").style.display = "flex";
+  $("loginErr").style.display = err ? "block" : "none"; $("loginErr").textContent = err || "";
+}
+$("codeBtn").onclick = async () => {
+  const v = $("codeInput").value.trim(); if (!v) return;
+  code = v; $("codeBtn").disabled = true;
+  try { await api("/api/day?date=" + today()); store.set("appCode", v); start(); }
+  catch (e) { if (e.message !== "401") showLogin(e.message); }
+  finally { $("codeBtn").disabled = false; }
+};
+
+// ---------- HEUTE ----------
+function renderHome(){
+  $("dateLabel").textContent = dateLabel(curDate);
+  $("nextDay").disabled = curDate >= today();
+  const d = day && day.date === curDate ? day : null;
+  const sl = d && d.sleep, rc = d && d.recovery, st = d && d.strain;
+  $("dialSleep").innerHTML = ring(sl && sl.performance != null ? sl.performance / 100 : 0, C.sleep, sl && sl.performance != null ? fmt(sl.performance) : "–", sl && sl.performance != null ? "%" : "", "small", 9);
+  $("dialRecovery").innerHTML = ring(rc ? rc.score / 100 : 0, bandColor(rc && rc.band), rc ? fmt(rc.score) : "–", rc ? "%" : "", "small", 9);
+  $("dialStrain").innerHTML = ring(st && st.score != null ? st.score / 21 : 0, C.strain, st && st.score != null ? fmt(st.score, 1) : "–", "", "small", 9, { marker: st && st.target ? (st.target[0] + st.target[1]) / 2 / 21 : null });
+  $("coach").innerHTML = d && rc ? `<div class="card coach"><div class="t">${esc({ green:"Bereit für mehr", yellow:"Moderater Tag", red:"Erholung zuerst" }[rc.band])}</div><div class="s">${esc(coachText(d))}</div></div>` : "";
+
+  const msgs = [];
+  if (d) for (const w of d.warnings) msgs.push(`<div class="warn">${esc(w)}</div>`);
+  if (lastError) msgs.push(`<div class="err">${esc(lastError)}</div>`);
+  $("msgs").innerHTML = msgs.join("");
+
+  const yd = addDays(today(), -1);
+  const done = journal && journal.entries[yd];
+  $("journalCta").innerHTML = curDate === today() && journal && !done ? `<div class="card"><button class="cta" id="ctaJ"><div><div class="t">Journal für gestern</div><div class="s">Ein paar Fragen zu deinem Verhalten</div></div><span class="pill">Start</span></button></div>` : "";
+  if ($("ctaJ")) $("ctaJ").onclick = () => { jDate = yd; switchTab("journal"); };
+
+  const acts = d ? d.strain.activities : [];
+  $("todayActs").innerHTML = acts.length ? acts.map(actRow).join("") : `<div class="sub" style="text-align:left">${d ? "Keine Aktivitäten an diesem Tag." : "…"}</div>`;
+  bindActs($("todayActs"));
+
+  if (d) {
+    const s = d.stats;
+    const rows = [
+      ["HRV", s.hrv, 0, " ms", 1], ["Ruhepuls", s.rhr, 0, " bpm", -1], ["Atemfrequenz", s.respiration, 1, " /min", 0],
+      ["Schlafdauer", s.sleepHours, null, " h", 1], ["Body Battery max", s.bodyBattery, 0, "", 1],
+      ["Ø Stress", s.stress, 0, "", -1], ["Schritte", s.steps, 0, "", 1], ["Kalorien", s.calories, 0, " kcal", 0],
+    ];
+    $("stats").innerHTML = rows.map(([k, o, dec, unit, good]) => {
+      const val = dec == null ? hm(o.value) : fmt(o.value, dec);
+      const avg = dec == null ? hm(o.avg30) : fmt(o.avg30, dec);
+      let arrow = "", cls = "flat";
+      if (o.value != null && o.avg30 != null && o.avg30 !== 0) {
+        const diff = (o.value - o.avg30) / Math.abs(o.avg30);
+        if (Math.abs(diff) >= 0.03) { arrow = diff > 0 ? "▲" : "▼"; cls = good === 0 ? "flat" : (diff > 0) === (good > 0) ? "up" : "down"; }
+      }
+      return `<div class="stat"><span>${k}</span><span class="v">${o.value == null ? "–" : val + unit} <span class="${cls}">${arrow}</span></span><span class="a">Ø ${o.avg30 == null ? "–" : avg + unit}</span></div>`;
+    }).join("");
+  } else $("stats").innerHTML = `<div class="sub">…</div>`;
+}
+
+function coachText(d){
+  const s = d.strain.score, t = d.strain.target;
+  if (!t) return "";
+  const goal = fmt((t[0] + t[1]) / 2, 1);
+  if (s < t[0]) return `Dein optimaler Belastungsbereich heute liegt bei ${fmt(t[0],1)}–${fmt(t[1],1)}. Zielwert: ${goal}.`;
+  if (s <= t[1]) return `Du bist in deinem optimalen Belastungsbereich. Je näher du dem Zielwert von ${goal} kommst, desto mehr steigerst du deine Fitness.`;
+  return `Du liegst über deinem optimalen Bereich (${fmt(t[0],1)}–${fmt(t[1],1)}). Plane genug Schlaf ein, damit du dich erholst.`;
+}
+
+function actRow(a){
+  const t = a.start ? a.start.slice(11,16) : "";
+  const meta = [a.date !== curDate ? dateLabel(a.date) : null, t, hmS(a.durationS), a.distanceM ? fmt(a.distanceM / 1000, 2) + " km" : null, a.avgHR ? "Ø " + fmt(a.avgHR) + " bpm" : null].filter(Boolean).join(" · ");
+  return `<button class="act" data-act="${esc(a.id)}"><div class="badge">${fmt(a.strain,1)}</div><div class="grow"><div class="n">${esc(a.name)}</div><div class="m">${esc(meta)}</div></div><span class="chev">›</span></button>`;
+}
+function bindActs(el){ el.querySelectorAll("[data-act]").forEach((b) => b.onclick = () => openActivity(b.dataset.act)); }
+
+let lastError = null;
+async function loadDay(fresh){
+  if (loading) return; loading = true;
+  $("refreshBtn").classList.add("spin");
+  $("status").textContent = "Synchronisiere mit Garmin …";
+  const D = curDate;
+  try {
+    const body = await api("/api/day?date=" + D + (fresh ? "&fresh=1" : ""));
+    if (D !== curDate) return;
+    day = body; lastError = null;
+    if (D === today()) store.set("lastDay", JSON.stringify(body));
+    $("status").textContent = "Stand " + new Date(body.updatedAt).toLocaleTimeString("de-DE", { hour:"2-digit", minute:"2-digit" }) + " · Garmin";
+    renderActs();
+  } catch (e) {
+    if (e.message === "401") return;
+    lastError = "Synchronisierung fehlgeschlagen: " + e.message;
+    $("status").textContent = day && day.date === D ? "Zeige letzten Stand" : "";
+  } finally {
+    loading = false; $("refreshBtn").classList.remove("spin"); renderHome();
+  }
+}
+
+$("prevDay").onclick = () => { curDate = addDays(curDate, -1); day = null; renderHome(); loadDay(); };
+$("nextDay").onclick = () => { if (curDate < today()) { curDate = addDays(curDate, 1); day = null; renderHome(); loadDay(); } };
+$("refreshBtn").onclick = () => loadDay(true);
+document.querySelectorAll("[data-open]").forEach((b) => b.onclick = () => openDetail(b.dataset.open));
+
+// ---------- DETAILS ----------
+function openOverlay(html){ $("detailBody").innerHTML = html; $("detail").classList.add("on"); $("detail").scrollTop = 0; history.pushState({ o:1 }, ""); }
+function closeOverlay(){ $("detail").classList.remove("on"); }
+$("detailBack").onclick = () => history.back();
+window.addEventListener("popstate", closeOverlay);
+
+function barsHtml(hist, valFn, colorFn, max){
+  const items = hist.map((h) => { const v = valFn(h); return `<div class="${h.date === curDate ? "sel" : ""}" style="height:${v == null ? 3 : Math.max(3, v / max * 96)}px;background:${v == null ? "" : colorFn(h)}" title="${h.date}"></div>`; }).join("");
+  return `<div class="bars">${items}</div><div class="barlabels"><span>${dateLabel(hist[0].date)}</span><span>${dateLabel(hist[hist.length - 1].date)}</span></div>`;
+}
+
+// Kennzahlen-Zeile wie bei Whoop: Label, optional Mini-Balken (3 Stufen), Wert, Pfeil vs. 30 Tage
+const Q = { bad:"#FFA800", ok:"rgba(255,255,255,.55)", good:"#00F19F" };
+function qual(v, lo, hi){ return v == null ? null : v >= hi ? "good" : v >= lo ? "ok" : "bad"; }
+function mbar(q){ const i = { bad:0, ok:1, good:2 }[q]; return `<span class="mbar">${[0,1,2].map((k) => `<i style="background:${k === i ? Q[q] : "rgba(255,255,255,.12)"}"></i>`).join("")}</span>`; }
+function trend(o, good){
+  if (!o || o.value == null || o.avg30 == null || !o.avg30) return `<span class="tr" style="color:${Q.ok}">•</span>`;
+  const diff = (o.value - o.avg30) / Math.abs(o.avg30);
+  if (Math.abs(diff) < 0.03) return `<span class="tr" style="color:${Q.ok}">•</span>`;
+  const col = good === 0 ? Q.ok : (diff > 0) === (good > 0) ? Q.good : Q.bad;
+  return `<span class="tr" style="color:${col}">${diff > 0 ? "▲" : "▼"}</span>`;
+}
+function mrow(label, value, extra){ return `<div class="mrow"><span class="ml">${label}</span>${extra && extra.bar ? mbar(extra.bar) : ""}<span class="mv">${value}</span>${extra && extra.trend != null ? extra.trend : ""}</div>`; }
+const LEG_TREND = `<div class="legbox"><span style="color:${Q.good}">▲</span><span style="color:${Q.bad};margin-left:-4px">▼</span> <b>Heute</b> vs. vorherige 30 Tage</div>`;
+const LEG_QUAL = `<div class="legbox"><span><i style="background:${Q.bad}"></i>Ungenügend</span><span><i style="background:${Q.ok}"></i>Ausreichend</span><span><i style="background:${Q.good}"></i>Optimal</span></div>`;
+const hmm = (s) => s == null ? "–" : (() => { const m = Math.round(s / 60); return String(Math.floor(m / 60)).padStart(2, "0") + ":" + String(m % 60).padStart(2, "0"); })();
+
+function recoveryText(d){
+  const r = d.recovery; if (!r) return "Deine Erholung wird berechnet, sobald die letzte Nacht bei Garmin angekommen ist. Synchronisiere dazu deine Uhr mit Garmin Connect.";
+  const s = d.stats, parts = [];
+  const cmp = (o, up, down) => o.value == null || o.avg30 == null ? null : (o.value - o.avg30) / o.avg30 > 0.03 ? up : (o.value - o.avg30) / o.avg30 < -0.03 ? down : null;
+  const h = cmp(s.hrv, "deine HFV ist erhöht", "deine HFV ist niedriger als üblich");
+  const rh = cmp(s.rhr, "deine RHF ist erhöht", "deine RHF ist niedriger als üblich");
+  [h, rh].forEach((x) => x && parts.push(x));
+  const lead = parts.length ? parts.join(" und ").replace(/^./, (c) => c.toUpperCase()) + ". " : "Deine HFV und RHF liegen im üblichen Bereich. ";
+  const end = { green:"Dein Körper ist gut erholt – ein guter Tag für eine höhere Belastung.", yellow:"Dein Körper ist teilweise erholt – eine moderate Belastung passt heute.", red:"Dein Körper braucht Erholung – heute besser locker bleiben oder pausieren." }[r.band];
+  return lead + end;
+}
+function strainText(d){
+  const s = d.strain.score, t = d.strain.target;
+  const lvl = s < 10 ? ["zwischen 0 und 9,9", "gering"] : s < 14 ? ["zwischen 10,0 und 13,9", "moderat"] : s < 18 ? ["zwischen 14,0 und 17,9", "hoch"] : ["ab 18,0", "sehr hoch"];
+  let txt = `Eine Belastung ${lvl[0]} gilt als ${lvl[1]}.`;
+  if (t) txt += s < t[0] ? ` Dein optimaler Bereich heute liegt bei ${fmt(t[0],1)}–${fmt(t[1],1)}.` : s > t[1] ? " Du liegst über deinem optimalen Bereich – achte heute auf genug Schlaf." : " Du bist in deinem optimalen Belastungsbereich.";
+  return txt;
+}
+function sleepText(d){
+  const s = d.sleep; if (!s) return "Für diese Nacht liegen noch keine Schlafdaten vor.";
+  const p = s.performance;
+  let t = p >= 85 ? "Deine Schlafleistung ist optimal." : p >= 70 ? "Deine Schlafleistung ist ausreichend, kann aber noch verbessert werden." : "Deine Schlafleistung ist ungenügend – dir fehlt Schlaf.";
+  if (s.regularity != null && s.regularity < 70) t += " Achte auch auf mehr Schlafregelmäßigkeit, um dich optimal zu erholen.";
+  return t;
+}
+
+function openDetail(kind){
+  const d = day && day.date === curDate ? day : null;
+  if (!d) return;
+  const hist = d.history, st = d.stats;
+  const head = `<div class="dhead">${dateLabel(curDate)}</div>`;
+  if (kind === "recovery") {
+    const r = d.recovery;
+    openOverlay(head + `
+      <div class="bigdial">${ring(r ? r.score / 100 : 0, bandColor(r && r.band), r ? fmt(r.score) : "–", r ? "%" : "", "big", 0, { label:"Erholung" })}</div>
+      <div class="mcard">
+        ${mrow("Herzfrequenzvariabilität", st.hrv.value != null ? fmt(st.hrv.value) : "–", { trend: trend(st.hrv, 1) })}
+        ${mrow("Ruheherzfrequenz", st.rhr.value != null ? fmt(st.rhr.value) : "–", { trend: trend(st.rhr, -1) })}
+        ${mrow("Atemfrequenz", st.respiration.value != null ? fmt(st.respiration.value, 1) : "–", { trend: trend(st.respiration, 0) })}
+        ${mrow("Schlafleistung", d.sleep && d.sleep.performance != null ? fmt(d.sleep.performance) + " %" : "–", { trend: trend(st.sleepPerf, 1) })}
+        ${LEG_TREND}
+      </div>
+      <div class="insight">${esc(recoveryText(d))}${r ? ` Empfohlene Belastung: ${fmt(d.strain.target[0],1)}–${fmt(d.strain.target[1],1)}.` : ""}</div>
+      <div class="card"><h3>Erholung · 30 Tage</h3>${barsHtml(hist, (h) => h.recovery, (h) => bandColor(h.band), 100)}</div>
+      <div class="sub">Berechnung: HFV gegenüber deiner Basis (${r && r.hrvBaseline != null ? fmt(r.hrvBaseline) + " ms" : "–"}, 50 %), RHF gegenüber deiner Basis (${r && r.rhrBaseline != null ? fmt(r.rhrBaseline,1) + " bpm" : "–"}, 25 %), Schlafleistung (25 %). Grün ab 67 %, Gelb ab 34 %.${r && r.hrvStatus ? " Garmin HRV-Status: " + esc(r.hrvStatus) + "." : ""}</div>`);
+  }
+  if (kind === "strain") {
+    const s = d.strain, t = s.target;
+    openOverlay(head + `
+      <div class="bigdial">${ring(s.score != null ? s.score / 21 : 0, C.strain, fmt(s.score, 1), "", "big", 0, { label:"Tagesbelastung", marker: t ? (t[0] + t[1]) / 2 / 21 : null })}</div>
+      <div class="mcard">
+        ${mrow("Herzfrequenzzonen 1–3", hmm(st.zones13.value), { trend: trend(st.zones13, 1) })}
+        ${mrow("Herzfrequenzzonen 4–5", hmm(st.zones45.value), { trend: trend(st.zones45, 1) })}
+        ${mrow("Dauer Krafttraining", hmm(st.strengthS.value), { trend: trend(st.strengthS, 1) })}
+        ${mrow("Schritte", fmt(st.steps.value), { trend: trend(st.steps, 1) })}
+        ${LEG_TREND}
+      </div>
+      <div class="insight">${esc(strainText(d))}</div>
+      ${t ? `<div class="card"><h3>Optimale Belastung heute</h3>
+        <div class="track"><div class="band" style="left:${t[0] / 21 * 100}%;width:${(t[1] - t[0]) / 21 * 100}%"></div><div class="mark" style="left:calc(${Math.min(21, s.score) / 21 * 100}% - 2px)"></div></div>
+        <div class="scale"><span>0</span><span>${fmt(t[0],1)}–${fmt(t[1],1)}</span><span>21</span></div></div>` : ""}
+      <div class="card"><h3>Aktivitäten</h3><div id="dActs">${s.activities.length ? s.activities.map(actRow).join("") : `<div class="sub" style="text-align:left">Keine Aktivitäten.</div>`}</div></div>
+      <div class="card"><h3>Belastung · 30 Tage</h3>${barsHtml(hist, (h) => h.strain, () => C.strain, 21)}</div>
+      <div class="sub">Berechnung: 21 · ln(1 + Last/12) / ln(1 + 90/12), Last = Garmin-Trainingsbelastung des Tages (${fmt(s.load - 4)}) + 4 für den Alltag.</div>`);
+    bindActs($("dActs"));
+  }
+  if (kind === "sleep") {
+    const s = d.sleep;
+    const tot = s ? (s.deepS || 0) + (s.lightS || 0) + (s.remS || 0) + (s.awakeS || 0) : 0;
+    const seg = (v, c) => tot ? `<div style="width:${(v || 0) / tot * 100}%;background:${c}"></div>` : "";
+    const SC = { awake:"#e8ecef", light:"#7BA1BB", deep:"#3E5F7A", rem:"#A98BDD" };
+    const pct = (v) => v == null ? "–" : fmt(v) + " %";
+    const stressQ = s && s.stress != null ? (s.stress <= 15 ? "good" : s.stress <= 25 ? "ok" : "bad") : null;
+    openOverlay(head + `
+      <div class="bigdial">${ring(s && s.performance != null ? s.performance / 100 : 0, C.sleep, s && s.performance != null ? fmt(s.performance) : "–", s && s.performance != null ? "%" : "", "big", 0, { label:"Schlafleistung" })}</div>
+      ${s ? `<div class="mcard">
+        ${mrow("Stunden vs. Bedarf", pct(s.performance), { bar: qual(s.performance, 70, 85) })}
+        ${mrow("Schlafregelmäßigkeit", pct(s.regularity), { bar: qual(s.regularity, 70, 85) })}
+        ${mrow("Schlafeffizienz", pct(s.efficiency), { bar: qual(s.efficiency, 85, 92) })}
+        ${mrow("Ø Schlafstress", s.stress != null ? fmt(s.stress) : "–", { bar: stressQ })}
+        ${LEG_QUAL}
+      </div>` : ""}
+      <div class="insight">${esc(sleepText(d))}${s ? ` ${hm(s.hours)} h geschlafen von ${hm(s.needHours)} h Bedarf${s.needSource === "garmin" ? " (laut Garmin)" : ""}.` : ""}</div>
+      ${s ? `<div class="card"><h3>Schlafphasen</h3>
+        <div class="stages">${seg(s.awakeS, SC.awake)}${seg(s.lightS, SC.light)}${seg(s.deepS, SC.deep)}${seg(s.remS, SC.rem)}</div>
+        <div class="legend"><span><i class="dot" style="background:${SC.awake}"></i>Wach ${hmS(s.awakeS)}</span><span><i class="dot" style="background:${SC.light}"></i>Leicht ${hmS(s.lightS)}</span>
+        <span><i class="dot" style="background:${SC.deep}"></i>Tief ${hmS(s.deepS)}</span><span><i class="dot" style="background:${SC.rem}"></i>REM ${hmS(s.remS)}</span></div></div>
+      <div class="card"><h3>Details</h3>
+        <div class="row"><span class="k">Garmin Schlaf-Score</span><span class="v">${fmt(s.garminScore)}${s.garminQualifier ? " · " + esc(s.garminQualifier) : ""}</span></div>
+        <div class="row"><span class="k">Eingeschlafen – Aufgewacht</span><span class="v">${s.start ? s.start.slice(11,16) : "–"} – ${s.end ? s.end.slice(11,16) : "–"}</span></div>
+        <div class="row"><span class="k">Ø Puls im Schlaf</span><span class="v">${fmt(s.avgHR)} bpm</span></div>
+        <div class="row"><span class="k">SpO2</span><span class="v">${s.spo2 != null ? fmt(s.spo2) + " %" : "–"}</span></div>
+        <div class="row"><span class="k">Aufwachphasen</span><span class="v">${fmt(s.awakeCount)}</span></div>
+      </div>` : ""}
+      <div class="card"><h3>Schlafleistung · 30 Tage</h3>${barsHtml(hist, (h) => h.sleepPerf, () => C.sleep, 100)}</div>
+      <div class="sub">Schlafleistung = geschlafene Zeit / Schlafbedarf. Schlafregelmäßigkeit ist eine Annäherung aus der Abweichung deiner Einschlaf- und Aufwachzeit von den 4 Nächten davor.</div>`);
+  }
+}
+
+function openActivity(id){
+  const a = (day && day.activities || []).find((x) => String(x.id) === String(id));
+  if (!a) return;
+  const ztot = a.zones.reduce((s, v) => s + v, 0);
+  const run = /run|walk|hik/i.test(a.type || "");
+  const speed = a.avgSpeed ? (run ? (() => { const sPerKm = 1000 / a.avgSpeed; return Math.floor(sPerKm / 60) + ":" + String(Math.round(sPerKm % 60)).padStart(2,"0") + " /km"; })() : fmt(a.avgSpeed * 3.6, 1) + " km/h") : null;
+  const rows = [
+    ["Datum", new Date(a.start.replace(" ", "T")).toLocaleString("de-DE", { weekday:"short", day:"2-digit", month:"2-digit", hour:"2-digit", minute:"2-digit" })],
+    ["Dauer", hmS(a.durationS) + " h"], a.distanceM ? ["Distanz", fmt(a.distanceM / 1000, 2) + " km"] : null,
+    speed ? [run ? "Ø Pace" : "Ø Tempo", speed] : null,
+    a.avgHR ? ["Puls Ø / max", fmt(a.avgHR) + " / " + fmt(a.maxHR) + " bpm"] : null,
+    a.cadence ? ["Kadenz", fmt(a.cadence) + " spm"] : null,
+    a.elevationGain ? ["Höhenmeter", fmt(a.elevationGain) + " m"] : null,
+    a.sets ? ["Sätze / Wdh.", fmt(a.sets) + " / " + fmt(a.reps)] : null,
+    ["Trainingsbelastung", fmt(a.load)],
+    a.aerobicTE != null ? ["Trainingseffekt aerob / anaerob", fmt(a.aerobicTE,1) + " / " + fmt(a.anaerobicTE,1)] : null,
+    a.teLabel ? ["Schwerpunkt", esc(a.teLabel)] : null,
+    a.calories ? ["Kalorien", fmt(a.calories) + " kcal"] : null,
+  ].filter(Boolean);
+  openOverlay(`
+    <div class="bigdial">${ring(a.strain / 21, C.strain, fmt(a.strain, 1), "", "big", 7)}<div class="bigtitle">${esc(a.name)}</div><div class="sub">Belastung dieser Aktivität</div></div>
+    <div class="card"><h3>Werte</h3>${rows.map(([k, v]) => `<div class="row"><span class="k">${k}</span><span class="v">${v}</span></div>`).join("")}</div>
+    ${ztot ? `<div class="card"><h3>Zeit in Pulszonen</h3><div class="zones">${a.zones.map((z, i) => `<div style="width:${z / ztot * 100}%;background:${ZONE_C[i]}"></div>`).join("")}</div>
+      ${a.zones.map((z, i) => `<div class="row"><span class="k"><i class="dot" style="display:inline-block;background:${ZONE_C[i]}"></i> Zone ${i + 1}</span><span class="v">${hmS(z)} · ${fmt(z / ztot * 100)} %</span></div>`).join("")}</div>` : ""}`);
+}
+
+// ---------- AKTIVITÄTEN ----------
+function renderActs(){
+  const acts = day ? day.activities : [];
+  if (!acts.length) { $("actList").innerHTML = `<div class="sub">Keine Aktivitäten in den letzten 30 Tagen.</div>`; return; }
+  const groups = {};
+  for (const a of acts) (groups[a.date] = groups[a.date] || []).push(a);
+  $("actList").innerHTML = Object.keys(groups).sort().reverse().map((dt) => `<div class="grp">${dateLabel(dt)}</div><div class="card" style="margin-top:4px">${groups[dt].map(actRow).join("")}</div>`).join("");
+  bindActs($("actList"));
+}
+
+// ---------- JOURNAL ----------
+async function loadJournal(){
+  try { journal = await api("/api/journal"); renderJournal(); renderHome(); }
+  catch (e) { if (e.message !== "401") $("jMsg").innerHTML = `<div class="err">${esc(e.message)}</div>`; }
+}
+function renderJournal(){
+  $("jDate").textContent = dateLabel(jDate);
+  $("jNext").disabled = jDate >= today();
+  if (!journal) return;
+  const saved = journal.entries[jDate];
+  if (!jDraft || jDraft.date !== jDate) jDraft = { date: jDate, answers: { ...(saved ? saved.answers : {}) }, note: saved ? saved.note : "" };
+  $("jList").innerHTML = journal.behaviors.map((b) => {
+    const v = jDraft.answers[b.id];
+    return `<div class="jrow"><span class="l">${esc(b.label)}</span><span class="yn"><button data-b="${esc(b.id)}" data-v="1" class="${v === true ? "yes" : ""}">Ja</button><button data-b="${esc(b.id)}" data-v="0" class="${v === false ? "no" : ""}">Nein</button></span></div>`;
+  }).join("");
+  $("jList").querySelectorAll("[data-b]").forEach((btn) => btn.onclick = () => {
+    const id = btn.dataset.b, val = btn.dataset.v === "1";
+    if (jDraft.answers[id] === val) delete jDraft.answers[id]; else jDraft.answers[id] = val;
+    renderJournal();
+  });
+  $("jNote").value = jDraft.note || "";
+  $("jStatus").textContent = saved ? "Gespeichert " + new Date(saved.savedAt).toLocaleString("de-DE", { day:"2-digit", month:"2-digit", hour:"2-digit", minute:"2-digit" }) : "Noch nicht ausgefüllt";
+  $("bEdit").innerHTML = journal.behaviors.map((b) => `<div class="jrow"><span class="l">${esc(b.label)}</span><button class="del" data-del="${esc(b.id)}" aria-label="Entfernen">×</button></div>`).join("");
+  $("bEdit").querySelectorAll("[data-del]").forEach((btn) => btn.onclick = () => saveBehaviors(journal.behaviors.filter((b) => b.id !== btn.dataset.del)));
+  renderInsights();
+}
+$("jNote").oninput = () => { if (jDraft) jDraft.note = $("jNote").value; };
+$("jPrev").onclick = () => { jDate = addDays(jDate, -1); renderJournal(); };
+$("jNext").onclick = () => { if (jDate < today()) { jDate = addDays(jDate, 1); renderJournal(); } };
+$("jSave").onclick = async () => {
+  $("jSave").disabled = true;
+  try {
+    await api("/api/journal/" + jDate, { method:"PUT", body: JSON.stringify({ answers: jDraft.answers, note: jDraft.note }) });
+    journal.entries[jDate] = { answers: { ...jDraft.answers }, note: jDraft.note, savedAt: new Date().toISOString() };
+    renderJournal(); renderHome();
+  } catch (e) { if (e.message !== "401") $("jStatus").textContent = "Fehler: " + e.message; }
+  finally { $("jSave").disabled = false; }
+};
+async function saveBehaviors(list){
+  try { const r = await api("/api/behaviors", { method:"PUT", body: JSON.stringify({ behaviors: list }) }); journal.behaviors = r.behaviors; renderJournal(); }
+  catch (e) { if (e.message !== "401") $("jStatus").textContent = "Fehler: " + e.message; }
+}
+$("bAdd").onclick = () => {
+  const label = $("bNew").value.trim(); if (!label || !journal) return;
+  const id = "c_" + Date.now().toString(36);
+  $("bNew").value = "";
+  saveBehaviors([...journal.behaviors, { id, label }]);
+};
+
+// Erholung am Morgen nach dem Journal-Tag: Ja- vs. Nein-Tage (mind. je 3)
+function renderInsights(){
+  if (!journal || !day) { $("insights").innerHTML = `<div class="sub" style="text-align:left">Lädt …</div>`; return; }
+  const recBy = {}; for (const h of day.history) if (h.recovery != null) recBy[h.date] = h.recovery;
+  const out = journal.behaviors.map((b) => {
+    const yes = [], no = [];
+    for (const [dt, e] of Object.entries(journal.entries)) {
+      const v = e.answers[b.id], r = recBy[addDays(dt, 1)];
+      if (r == null || v == null) continue;
+      (v ? yes : no).push(r);
+    }
+    const avg = (a) => a.reduce((s, x) => s + x, 0) / a.length;
+    if (yes.length < 3 || no.length < 3) return { b, txt: `Noch zu wenig Daten (${yes.length}/3 × Ja, ${no.length}/3 × Nein)`, diff: null };
+    const diff = avg(yes) - avg(no);
+    return { b, diff, txt: `Mit: Ø ${fmt(avg(yes))} % · Ohne: Ø ${fmt(avg(no))} % → <b class="${diff >= 0 ? "up" : "down"}">${diff >= 0 ? "+" : ""}${fmt(diff)} Punkte</b>` };
+  }).sort((x, y) => (y.diff == null ? -1 : Math.abs(y.diff)) - (x.diff == null ? -1 : Math.abs(x.diff)));
+  const ready = out.filter((o) => o.diff != null);
+  if (!ready.length) {
+    const n = Object.keys(journal.entries).length;
+    $("insights").innerHTML = `<div class="sub" style="text-align:left">Noch zu wenig Daten. Pro Verhalten brauche ich mindestens 3 Tage mit „Ja“ und 3 mit „Nein“, jeweils mit Erholungswert am nächsten Morgen. Bisher ${n} Journal-${n === 1 ? "Eintrag" : "Einträge"}.</div>`;
+    return;
+  }
+  $("insights").innerHTML = out.map((o) => `<div class="ins"><div class="l">${esc(o.b.label)}</div><div class="d">${o.txt}</div></div>`).join("")
+    + `<div class="sub" style="text-align:left;margin-top:8px">Vergleich der Erholung am Morgen danach, über die letzten 30 Tage. Zeigt Zusammenhänge, keine Ursachen.</div>`;
+}
+
+// ---------- NAVIGATION ----------
+function switchTab(t){
+  document.querySelectorAll(".tabbar button").forEach((b) => b.classList.toggle("on", b.dataset.tab === t));
+  document.querySelectorAll(".screen").forEach((s) => s.classList.toggle("on", s.id === "scr-" + t));
+  if (t === "journal") renderJournal();
+  if (t === "acts") renderActs();
+  window.scrollTo(0, 0);
+}
+document.querySelectorAll(".tabbar button").forEach((b) => b.onclick = () => switchTab(b.dataset.tab));
+
+let lastLoad = 0;
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible" && code && Date.now() - lastLoad > 60000) {
+    if (curDate !== today() && !day) curDate = today();
+    lastLoad = Date.now(); loadDay();
+  }
+});
+
+function start(){
+  $("login").style.display = "none"; $("app").style.display = "block";
+  const cached = store.get("lastDay");
+  if (cached) { try { const c = JSON.parse(cached); if (c.date === today()) day = c; } catch {} }
+  renderHome(); renderActs();
+  lastLoad = Date.now();
+  loadDay(); loadJournal();
+}
+if (code) start(); else showLogin();
+</script>
+</body>
+</html>

@@ -1,114 +1,151 @@
-// Verbindungstest für die Garmin Connect Personal API.
-// Secrets (nur im Cloudflare-Dashboard gesetzt, nie im Code):
+// whoop-replacement: App im Whoop-Stil auf Basis der Garmin Connect Personal API.
+// Secrets (nur im Cloudflare-Dashboard, nie im Code):
 //   GARMIN_API_KEY  – persönlicher API-Schlüssel aus Garmin Connect
-//   APP_CODE        – eigener Zugangscode, schützt diesen Worker
-// Nur lesende Abfragen (GET). Schlüssel und Token werden nie ausgegeben.
+//   APP_CODE        – eigener Zugangscode, schützt alle /api-Adressen
+// KV-Speicher DATA: Garmin-Token-Cache, Journal, Verhaltensliste.
+// Garmin wird nur lesend abgefragt. Schlüssel und Token werden nie ausgegeben.
 
-const BASE = "https://personal.connectapi.garmin.com";
-const TOKEN_PATH = "/personalapitoken-service/personal-api/personal-api-key/token";
+import APP_HTML from "./app.html";
+import { ICON_SVG } from "./icon.js";
+import { garminGet, GarminError } from "./garmin.js";
+import { addDays, buildDay } from "./scores.js";
 
-function isoDate(daysAgo) {
-  const d = new Date(Date.now() - daysAgo * 86400000);
-  return d.toISOString().slice(0, 10);
-}
+const WINDOW_DAYS = 30;
+const DAY_CACHE_MS = 60 * 1000;
+const dayCache = new Map(); // pro Worker-Instanz, schont Garmin bei schnellem Neuladen
+
+const DEFAULT_BEHAVIORS = [
+  { id: "alcohol", label: "Alkohol getrunken" },
+  { id: "caffeine_late", label: "Koffein nach 14 Uhr" },
+  { id: "late_meal", label: "Spät gegessen (< 2 h vor dem Schlafen)" },
+  { id: "screen_bed", label: "Handy/Bildschirm im Bett" },
+  { id: "sauna", label: "Sauna" },
+  { id: "cold", label: "Kaltdusche / Eisbad" },
+  { id: "magnesium", label: "Magnesium genommen" },
+  { id: "hydrated", label: "Ausreichend getrunken" },
+  { id: "stress", label: "Viel Stress" },
+  { id: "sick", label: "Krank / Symptome" },
+  { id: "reading", label: "Vor dem Schlafen gelesen" },
+  { id: "meditation", label: "Meditation / Atemübung" },
+];
 
 function json(body, status = 200) {
-  return new Response(JSON.stringify(body, null, 2), {
+  return new Response(JSON.stringify(body), {
     status,
     headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" },
   });
 }
 
-// Holt ein Zugangs-Token. Gibt das Token zurück plus eine Beschreibung der
-// Antwort-Struktur (nur Feldnamen und Typen, keine Werte).
-async function getToken(env) {
-  const res = await fetch(BASE + TOKEN_PATH, {
-    method: "POST",
-    headers: { Authorization: "ApiKey " + env.GARMIN_API_KEY },
-  });
-  const text = await res.text();
-  let body = null;
-  try { body = JSON.parse(text); } catch {}
-  const shape = body && typeof body === "object"
-    ? Object.fromEntries(Object.entries(body).map(([k, v]) => [k, typeof v]))
-    : { contentType: res.headers.get("content-type"), length: text.length };
-  let token = null;
-  if (res.ok) {
-    if (body && typeof body === "object") {
-      const key = Object.keys(body).find((k) => /token/i.test(k) && typeof body[k] === "string");
-      token = key ? body[key] : null;
-      shape._tokenField = key || null;
-    } else if (text && !text.includes(" ")) {
-      token = text.trim();
-    }
+function sameCode(a, b) {
+  if (typeof a !== "string" || typeof b !== "string" || a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
+}
+
+const isDate = (s) => typeof s === "string" && /^\d{4}-\d{2}-\d{2}$/.test(s);
+
+async function loadDay(env, D, fresh) {
+  const hit = dayCache.get(D);
+  if (hit && Date.now() - hit.t < (fresh ? 15000 : DAY_CACHE_MS)) return hit.body;
+  const from = addDays(D, -WINDOW_DAYS);
+  const [activities, hrv, sleep, summaries] = await Promise.all([
+    garminGet(env, `/activitylist-service/activities/search/activities?startDate=${from}&endDate=${D}&limit=99`),
+    garminGet(env, `/hrv-service/hrv/daily/${from}/${D}`),
+    garminGet(env, `/sleep-service/sleep/dailySleepSummariesByDate?startDate=${from}&endDate=${D}`),
+    garminGet(env, `/usersummary-service/v2/dailysummaries?startDate=${from}&endDate=${D}`),
+  ]);
+  const body = buildDay(D, { activities, hrv, sleep, summaries }, WINDOW_DAYS);
+  body.updatedAt = new Date().toISOString();
+  dayCache.set(D, { t: Date.now(), body });
+  return body;
+}
+
+async function readJournal(env) {
+  const [entries, behaviors] = await Promise.all([
+    env.DATA.get("journal", "json"),
+    env.DATA.get("behaviors", "json"),
+  ]);
+  return { entries: entries || {}, behaviors: behaviors || DEFAULT_BEHAVIORS };
+}
+
+async function handleApi(request, env, url) {
+  const p = url.pathname;
+
+  if (p === "/api/day" && request.method === "GET") {
+    const D = url.searchParams.get("date");
+    if (!isDate(D)) return json({ error: "date fehlt (YYYY-MM-DD)" }, 400);
+    return json(await loadDay(env, D, url.searchParams.has("fresh")));
   }
-  return { status: res.status, retryAfter: res.headers.get("retry-after"), shape, token };
-}
 
-async function get(path, token) {
-  const res = await fetch(BASE + path, { headers: { Authorization: "Bearer " + token } });
-  let body = null;
-  try { body = await res.json(); } catch {}
-  return { status: res.status, retryAfter: res.headers.get("retry-after"), body };
-}
+  if (!env.DATA) return json({ error: "KV-Speicher DATA ist nicht verbunden" }, 503);
 
-function describe(r) {
-  const out = { status: r.status };
-  if (r.retryAfter) out.retryAfter = r.retryAfter;
-  const b = r.body;
-  if (Array.isArray(b)) {
-    out.count = b.length;
-    out.fields = b.length ? Object.keys(b[0]) : [];
-  } else if (b && typeof b === "object") {
-    out.fields = Object.keys(b);
+  if (p === "/api/journal" && request.method === "GET") return json(await readJournal(env));
+
+  const m = p.match(/^\/api\/journal\/(\d{4}-\d{2}-\d{2})$/);
+  if (m && request.method === "PUT") {
+    const body = await request.json().catch(() => null);
+    if (!body || typeof body.answers !== "object") return json({ error: "answers fehlt" }, 400);
+    const { entries } = await readJournal(env);
+    const answers = {};
+    for (const [k, v] of Object.entries(body.answers)) if (typeof v === "boolean") answers[String(k).slice(0, 40)] = v;
+    entries[m[1]] = { answers, note: String(body.note || "").slice(0, 500), savedAt: new Date().toISOString() };
+    await env.DATA.put("journal", JSON.stringify(entries));
+    return json({ ok: true });
   }
-  return out;
-}
 
-async function connectionTest(env) {
-  if (!env.GARMIN_API_KEY) return { error: "Secret GARMIN_API_KEY fehlt" };
-  const t = await getToken(env);
-  const result = { token: { status: t.status, retryAfter: t.retryAfter, shape: t.shape } };
-  if (!t.token) return result;
-
-  const acts = (from, to) =>
-    `/activitylist-service/activities/search/activities?startDate=${isoDate(from)}&endDate=${isoDate(to)}&limit=99`;
-
-  // Nacheinander statt parallel, um Garmin nicht zu fluten. Bei 429 sofort aufhören.
-  const checks = [
-    ["aktivitaeten_letzte_7_tage", acts(7, 0)],
-    ["schlaf_letzte_nacht", `/sleep-service/sleep/dailySleep?date=${isoDate(0)}`],
-    ["hrv_letzte_7_tage", `/hrv-service/hrv/daily/${isoDate(7)}/${isoDate(0)}`],
-    ["tageszusammenfassung_heute", `/usersummary-service/usersummary/daily?calendarDate=${isoDate(0)}`],
-    ["aktivitaeten_vor_30_tagen", acts(37, 30)],
-    ["aktivitaeten_vor_180_tagen", acts(187, 180)],
-    ["hrv_vor_180_tagen", `/hrv-service/hrv/daily/${isoDate(187)}/${isoDate(180)}`],
-  ];
-  for (const [name, path] of checks) {
-    const r = await get(path, t.token);
-    result[name] = describe(r);
-    if (name === "hrv_letzte_7_tage" && r.body && Array.isArray(r.body.hrvSummaries)) {
-      result[name].tage = r.body.hrvSummaries.length;
-    }
-    if (r.status === 429) { result.abgebrochen = "429 – zu viele Anfragen, bitte später erneut"; break; }
+  if (p === "/api/behaviors" && request.method === "PUT") {
+    const body = await request.json().catch(() => null);
+    if (!body || !Array.isArray(body.behaviors)) return json({ error: "behaviors fehlt" }, 400);
+    const list = body.behaviors
+      .filter((b) => b && typeof b.id === "string" && typeof b.label === "string")
+      .slice(0, 40)
+      .map((b) => ({ id: b.id.slice(0, 40), label: b.label.slice(0, 60) }));
+    await env.DATA.put("behaviors", JSON.stringify(list));
+    return json({ ok: true, behaviors: list });
   }
-  return result;
+
+  return json({ error: "nicht gefunden" }, 404);
 }
+
+const MANIFEST = {
+  name: "Recovery",
+  short_name: "Recovery",
+  start_url: "/",
+  display: "standalone",
+  background_color: "#101518",
+  theme_color: "#101518",
+  icons: [{ src: "/icon.svg", sizes: "any", type: "image/svg+xml", purpose: "any maskable" }],
+};
 
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
-    if (url.pathname === "/") {
-      return new Response("whoop-replacement läuft. Test: /test?code=DEIN_CODE", {
-        headers: { "content-type": "text/plain; charset=utf-8" },
-      });
+
+    if (url.pathname === "/" || url.pathname === "/index.html") {
+      return new Response(APP_HTML, { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-cache" } });
     }
-    if (url.pathname === "/test") {
-      if (!env.APP_CODE || url.searchParams.get("code") !== env.APP_CODE) {
-        return json({ error: "Zugangscode fehlt oder falsch" }, 401);
+    if (url.pathname === "/manifest.webmanifest") {
+      return new Response(JSON.stringify(MANIFEST), { headers: { "content-type": "application/manifest+json" } });
+    }
+    if (url.pathname === "/icon.svg") {
+      return new Response(ICON_SVG, { headers: { "content-type": "image/svg+xml", "cache-control": "max-age=86400" } });
+    }
+
+    if (url.pathname.startsWith("/api/")) {
+      if (!env.APP_CODE || !sameCode(request.headers.get("x-app-code"), env.APP_CODE)) {
+        return json({ error: "Zugangscode falsch" }, 401);
       }
-      return json(await connectionTest(env));
+      try {
+        return await handleApi(request, env, url);
+      } catch (e) {
+        if (e instanceof GarminError) {
+          return json({ error: e.message, garminStatus: e.status, retryAfter: e.retryAfter || null }, 502);
+        }
+        return json({ error: "Interner Fehler: " + (e && e.message) }, 500);
+      }
     }
+
     return json({ error: "nicht gefunden" }, 404);
   },
 };

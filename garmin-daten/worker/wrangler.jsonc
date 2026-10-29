@@ -1,5 +1,9 @@
 {
   "name": "whoop-replacement",
   "main": "src/index.js",
-  "compatibility_date": "2025-10-01"
+  "compatibility_date": "2025-10-01",
+  // app.html wird als Text eingebunden
+  "rules": [{ "type": "Text", "globs": ["**/*.html"], "fallthrough": true }],
+  // KV-Speicher für Token-Cache und Journal. Ohne "id" legt wrangler ihn beim Deploy selbst an.
+  "kv_namespaces": [{ "binding": "DATA" }]
 }
